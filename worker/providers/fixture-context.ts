@@ -1,0 +1,18 @@
+import type { ContextAnalysis } from '../../shared/contracts/context';
+
+export const fridayMergeContextAnalysis: ContextAnalysis = {
+  literalMeaning: '“fearless behavior” literally means 无畏的行为。',
+  contextualMeaning: 'In this developer context, it is playful teasing rather than serious praise.',
+  tone: ['playful', 'sarcastic'],
+  register: 'technical',
+  communityContext: 'Technical developer communities often treat risky Friday changes as a shared warning sign.',
+  socialImplication: 'The speaker assumes shared understanding of developer norms and a familiar relationship.',
+  usageBoundary: { naturalIn: 'Close teammates', beCarefulIn: 'New coworkers', avoidIn: 'Formal review' },
+  confidence: 'high',
+  uncertainty: 'The text does not prove whether anyone is genuinely annoyed or only extending the joke.',
+  signals: [
+    { phrase: 'on a friday??', signalType: 'timing', explanation: 'The timing implies concern about making a risky change before the weekend.' },
+    { phrase: 'fearless behavior 💀', signalType: 'irony', explanation: 'The skull emoji undercuts the apparent praise and signals playful sarcasm.' },
+    { phrase: 'enjoy your weekend', signalType: 'community_norm', explanation: 'The closing line continues a developer in-joke about weekend support risk.' },
+  ],
+};

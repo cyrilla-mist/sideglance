@@ -11,7 +11,7 @@ describe('worker health route', () => {
   it('decodes the Friday Merge fixture', async () => {
     const response = await worker.fetch(new Request('http://localhost/api/decode', { method: 'POST', body: JSON.stringify({ inputText: 'Kai: on a friday??\n\nLeo: fearless behavior 💀\n\nNora: wait what\n\nLeo: nothing. enjoy your weekend' }), headers: { 'content-type': 'application/json' } }));
     expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({ type: 'decoded', confidence: 'high' });
+    expect(await response.json()).toMatchObject({ type: 'decoded', confidence: 'high', contextAnalysis: { tone: ['playful', 'sarcastic'], register: 'technical' } });
   });
 
   it('returns needs context for an isolated phrase', async () => {

@@ -27,6 +27,7 @@ export type DecodedResponse = {
   signals: DecodeSignal[];
   usageBoundary: UsageBoundary;
   confidence: Confidence;
+  contextAnalysis?: import('./context').ContextAnalysis;
 };
 
 export type NeedsContextResponse = {
