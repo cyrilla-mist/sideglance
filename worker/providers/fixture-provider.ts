@@ -5,11 +5,13 @@ const fridaySnapshot = 'Kai and Leo are jokingly warning Nora that making a risk
 export class FixtureProvider {
   decode(request: DecodeRequest): DecodeResponse {
     const input = request.inputText.toLowerCase().trim();
+    const fullText = `${input}\n${request.additionalContext?.toLowerCase() ?? ''}`;
     if (input === 'fearless behavior' && !request.additionalContext?.trim()) {
       return { type: 'needs_context', originalMoment: request.inputText, reason: 'ambiguous_phrase', question: 'What was said immediately before this?', missingContext: 'The phrase could be sincere praise or sarcasm depending on the situation.' };
     }
     if (request.additionalContext?.toLowerCase().includes('mia:') && (request.additionalContext.toLowerCase().includes('terrified') || request.additionalContext.toLowerCase().includes('spoke up'))) return this.fearlessPraise(request);
-    if (input.includes('on a friday??') && input.includes('fearless behavior') && input.includes('enjoy your weekend')) return this.fridayMerge(request);
+    if (fullText.includes('friday') && fullText.includes('fearless behavior')) return this.fridayMerge(request);
+    if (input === 'touch grass') return this.touchGrass(request);
     return { type: 'failed', errorCode: 'unknown_fixture', message: 'This Task 02 slice only recognizes the bundled fixture conversations.' };
   }
 
@@ -26,5 +28,12 @@ export class FixtureProvider {
       { id: 'signal-01', quote: 'spoke up about the issue', category: 'literal', explanation: 'The specific action gives the compliment a sincere subject.' },
       { id: 'signal-02', quote: 'even though I was terrified', category: 'tone', explanation: 'The admission of fear makes "fearless behavior" read as genuine encouragement.' },
     ], usageBoundary: { natural: 'Supportive teammates or close friends', depends: 'New teammates', avoid: 'Formal client communication without context' }, confidence: 'high' };
+  }
+
+  private touchGrass(request: DecodeRequest): DecodeResponse {
+    return { type: 'decoded', originalMoment: request.inputText, snapshot: 'This is internet slang telling someone they are too deep in online discourse and should reconnect with ordinary life.', signals: [
+      { id: 'signal-01', quote: 'touch grass', category: 'community_norm', explanation: 'The phrase is a recognizable online shorthand, not a literal request.' },
+      { id: 'signal-02', quote: 'grass', category: 'tone', explanation: 'The ordinary image turns the message into teasing criticism.' },
+    ], usageBoundary: { natural: 'Online communities and familiar peers', depends: 'New coworkers', avoid: 'Formal or sensitive conversations' }, confidence: 'high' };
   }
 }

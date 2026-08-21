@@ -1,0 +1,5 @@
+{
+  "id": "demo-friday-context",
+  "input": "Kai:\nAre you really deploying this on Friday?\n\nLeo:\nfearless behavior 💀",
+  "expected": "decoded"
+}

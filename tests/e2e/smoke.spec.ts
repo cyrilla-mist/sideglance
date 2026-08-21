@@ -28,3 +28,10 @@ test('Needs Context flow decodes after the user supplies context', async ({ page
   await expect(page.getByRole('heading', { name: "What's actually happening?" })).toBeVisible();
   await expect(page.locator('.snapshot')).toContainText('genuine encouragement');
 });
+
+test('empty input gets a friendly prompt', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: /Decode Context/ }).click();
+  await expect(page.getByRole('heading', { name: /couldn't read that moment/i })).toBeVisible();
+  await expect(page.getByText('Paste a phrase or conversation first.')).toBeVisible();
+});

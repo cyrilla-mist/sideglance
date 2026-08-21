@@ -32,3 +32,19 @@ export const sincereFearlessContextAnalysis: ContextAnalysis = {
     { phrase: 'fearless behavior', signalType: 'relationship', explanation: 'The phrase directly affirms a difficult action rather than using irony.' },
   ],
 };
+
+export const touchGrassContextAnalysis: ContextAnalysis = {
+  literalMeaning: '“touch grass” literally means to go outside and touch grass.',
+  contextualMeaning: 'It is internet slang telling someone they are too absorbed in online discourse and should reconnect with ordinary life.',
+  tone: ['playful', 'critical'],
+  register: 'community',
+  communityContext: 'Internet slang used in online discourse, often as teasing criticism.',
+  socialImplication: 'The speaker assumes the listener understands online community shorthand and is being lightly called out.',
+  usageBoundary: { naturalIn: 'Online communities and familiar peers', beCarefulIn: 'New coworkers', avoidIn: 'Formal or sensitive conversations' },
+  confidence: 'high',
+  uncertainty: 'The phrase may be playful or genuinely dismissive depending on the relationship and exchange.',
+  signals: [
+    { phrase: 'touch grass', signalType: 'community_norm', explanation: 'The phrase is a recognizable internet shorthand rather than a literal instruction.' },
+    { phrase: 'grass', signalType: 'wording', explanation: 'The ordinary image creates a contrast with excessive online focus.' },
+  ],
+};

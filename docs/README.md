@@ -1,5 +1,5 @@
-# Sideglance formal project scaffold
+# Sideglance formal project
 
-This is the official AI Builders submission foundation for Sideglance.
+This is the official AI Builders submission project for Sideglance.
 
-Task 01 intentionally includes only the frontend scaffold, shared health contract, Cloudflare Worker health route, and testing foundation. AI, model APIs, prompts, database, auth, Radar, Archive, and the full decode pipeline are not implemented.
+The current implementation includes a deterministic demo flow, Context Gate, Context Engine contracts, provider validation, and an independent evaluation layer. AI mode remains opt-in through Worker environment variables. Database, auth, Radar, Archive, RAG, memory, and multi-agent systems are outside the project boundary.

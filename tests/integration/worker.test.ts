@@ -27,6 +27,18 @@ describe('worker health route', () => {
     expect(await response.json()).toMatchObject({ type: 'decoded', contextAnalysis: { tone: ['sincere'] } });
   });
 
+  it('decodes the deterministic touch grass demo fixture', async () => {
+    const response = await worker.fetch(new Request('http://localhost/api/decode', { method: 'POST', body: JSON.stringify({ inputText: 'touch grass' }), headers: { 'content-type': 'application/json' } }));
+    expect(await response.json()).toMatchObject({ type: 'decoded', snapshot: expect.stringContaining('internet slang') });
+  });
+
+  it('returns friendly failed responses for empty and invalid requests', async () => {
+    const emptyResponse = await worker.fetch(new Request('http://localhost/api/decode', { method: 'POST', body: JSON.stringify({ inputText: '   ' }), headers: { 'content-type': 'application/json' } }));
+    expect(await emptyResponse.json()).toMatchObject({ type: 'failed', errorCode: 'invalid_request' });
+    const invalidResponse = await worker.fetch(new Request('http://localhost/api/decode', { method: 'POST', body: '{', headers: { 'content-type': 'application/json' } }));
+    expect(await invalidResponse.json()).toEqual({ type: 'failed', errorCode: 'invalid_request', message: 'Request body must be valid JSON.' });
+  });
+
   it('does not fall back to fixture or expose details when AI mode lacks a key', async () => {
     const response = await worker.fetch(new Request('http://localhost/api/decode', { method: 'POST', body: JSON.stringify({ inputText: 'touch grass' }), headers: { 'content-type': 'application/json' } }), { CONTEXT_ENGINE_MODE: 'ai' });
     expect(response.status).toBe(502);
