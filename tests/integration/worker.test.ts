@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import worker from '../../worker/index';
+import { ContextEvaluator } from '../../evaluation/evaluator/context-evaluator';
+import { fridayMergeContextAnalysis } from '../../worker/providers/fixture-context';
 
 describe('worker health route', () => {
   it('serves GET /api/health', async () => {
@@ -23,5 +25,12 @@ describe('worker health route', () => {
     const response = await worker.fetch(new Request('http://localhost/api/decode', { method: 'POST', body: JSON.stringify({ inputText: 'touch grass' }), headers: { 'content-type': 'application/json' } }), { CONTEXT_ENGINE_MODE: 'ai' });
     expect(response.status).toBe(502);
     expect(await response.json()).toEqual({ type: 'failed', errorCode: 'missing_api_key', message: 'Context model API key is not configured.' });
+  });
+
+  it('evaluates the fixture context output independently from the API route', () => {
+    const result = new ContextEvaluator().evaluate({ id: 'friday-fixture', category: 'developer_culture', input: 'fearless behavior 💀', expected: {
+      tone: ['sarcastic', 'playful'], communityContext: 'developer norm', requiredSignals: [{ phrase: 'fearless behavior', signalTypes: ['irony'] }], uncertaintyRequired: true,
+    } }, fridayMergeContextAnalysis);
+    expect(result.passed).toBe(true);
   });
 });
