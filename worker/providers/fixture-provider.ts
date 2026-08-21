@@ -8,7 +8,7 @@ export class FixtureProvider {
     if (input === 'fearless behavior' && !request.additionalContext?.trim()) {
       return { type: 'needs_context', originalMoment: request.inputText, reason: 'ambiguous_phrase', question: 'What was said immediately before this?', missingContext: 'The phrase could be sincere praise or sarcasm depending on the situation.' };
     }
-    if (request.additionalContext?.toLowerCase().includes('mia:') && request.additionalContext.toLowerCase().includes('terrified')) return this.fearlessPraise(request);
+    if (request.additionalContext?.toLowerCase().includes('mia:') && (request.additionalContext.toLowerCase().includes('terrified') || request.additionalContext.toLowerCase().includes('spoke up'))) return this.fearlessPraise(request);
     if (input.includes('on a friday??') && input.includes('fearless behavior') && input.includes('enjoy your weekend')) return this.fridayMerge(request);
     return { type: 'failed', errorCode: 'unknown_fixture', message: 'This Task 02 slice only recognizes the bundled fixture conversations.' };
   }

@@ -17,3 +17,14 @@ test('isolated phrase enters Needs Context', async ({ page }) => {
   await expect(page.getByRole('heading', { name: /Need a little more context/i })).toBeVisible();
   await expect(page.getByText('What was said immediately before this?')).toBeVisible();
 });
+
+test('Needs Context flow decodes after the user supplies context', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('textbox', { name: /Paste something/ }).fill('fearless behavior');
+  await page.getByRole('button', { name: /Decode Context/ }).click();
+  await expect(page.locator('[data-context-gate="needs-context"]')).toBeVisible();
+  await page.getByRole('textbox', { name: /What was said immediately before this/ }).fill('Mia: I finally spoke up about the issue.\n\nAlex: That was fearless behavior.');
+  await page.getByRole('button', { name: /Decode again/ }).click();
+  await expect(page.getByRole('heading', { name: "What's actually happening?" })).toBeVisible();
+  await expect(page.locator('.snapshot')).toContainText('genuine encouragement');
+});

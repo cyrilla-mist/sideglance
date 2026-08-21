@@ -1,5 +1,5 @@
 import type { ContextAnalysis } from '../../shared/contracts/context';
-import { fridayMergeContextAnalysis } from '../providers/fixture-context';
+import { fridayMergeContextAnalysis, sincereFearlessContextAnalysis } from '../providers/fixture-context';
 import type { ContextModelProvider } from '../providers/context-provider';
 
 export interface ContextEngine {
@@ -7,11 +7,12 @@ export interface ContextEngine {
 }
 
 export class MockContextEngine implements ContextEngine {
-  async analyze(input: string, _additionalContext?: string): Promise<ContextAnalysis | undefined> {
-    const normalized = input.toLowerCase();
+  async analyze(input: string, additionalContext?: string): Promise<ContextAnalysis | undefined> {
+    const normalized = `${input}\n${additionalContext ?? ''}`.toLowerCase();
     if (normalized.includes('on a friday??') && normalized.includes('fearless behavior') && normalized.includes('enjoy your weekend')) {
       return fridayMergeContextAnalysis;
     }
+    if (normalized.includes('mia:') && normalized.includes('spoke up') && normalized.includes('issue')) return sincereFearlessContextAnalysis;
     return undefined;
   }
 }

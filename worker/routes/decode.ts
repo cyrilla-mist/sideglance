@@ -5,6 +5,7 @@ import type { ContextAnalysis } from '../../shared/contracts/context';
 import type { ContextEngine } from '../engine/context-engine';
 import { AIContextEngine, MockContextEngine } from '../engine/context-engine';
 import { ContextProviderError, ModelContextProvider } from '../providers/context-provider';
+import { MockContextGateEngine } from '../engine/context-gate';
 
 export type WorkerEnv = {
   CONTEXT_ENGINE_MODE?: string;
@@ -18,6 +19,10 @@ export async function handleDecode(request: Request, env: WorkerEnv = {}): Promi
   try { body = await request.json(); } catch { return json({ type: 'failed', errorCode: 'invalid_request', message: 'Request body must be valid JSON.' }, 400); }
   try {
     const request = parseDecodeRequest(body);
+    const gateResult = new MockContextGateEngine().checkContext(request.inputText, request.additionalContext);
+    if (gateResult.status === 'needs_context') {
+      return json({ type: 'needs_context', originalMoment: request.inputText, reason: 'ambiguous_phrase', question: gateResult.question ?? 'What was said immediately before this?', missingContext: gateResult.missingInformation ?? 'The meaning is ambiguous without the surrounding exchange.' }, 200);
+    }
     const contextEngine = createContextEngine(env);
     if (env.CONTEXT_ENGINE_MODE === 'ai') {
       const contextAnalysis = await contextEngine.analyze(request.inputText, request.additionalContext);

@@ -21,6 +21,12 @@ describe('worker health route', () => {
     expect(await response.json()).toMatchObject({ type: 'needs_context', reason: 'ambiguous_phrase' });
   });
 
+  it('decodes after the user supplies the minimum missing context', async () => {
+    const response = await worker.fetch(new Request('http://localhost/api/decode', { method: 'POST', body: JSON.stringify({ inputText: 'fearless behavior', additionalContext: 'Mia: I finally spoke up about the issue.\n\nAlex: That was fearless behavior.' }), headers: { 'content-type': 'application/json' } }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ type: 'decoded', contextAnalysis: { tone: ['sincere'] } });
+  });
+
   it('does not fall back to fixture or expose details when AI mode lacks a key', async () => {
     const response = await worker.fetch(new Request('http://localhost/api/decode', { method: 'POST', body: JSON.stringify({ inputText: 'touch grass' }), headers: { 'content-type': 'application/json' } }), { CONTEXT_ENGINE_MODE: 'ai' });
     expect(response.status).toBe(502);

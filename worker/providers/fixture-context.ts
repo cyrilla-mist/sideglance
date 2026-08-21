@@ -16,3 +16,19 @@ export const fridayMergeContextAnalysis: ContextAnalysis = {
     { phrase: 'enjoy your weekend', signalType: 'community_norm', explanation: 'The closing line continues a developer in-joke about weekend support risk.' },
   ],
 };
+
+export const sincereFearlessContextAnalysis: ContextAnalysis = {
+  literalMeaning: '“fearless behavior” literally means 无畏的行为。',
+  contextualMeaning: 'Here it is sincere encouragement for speaking up about a difficult issue.',
+  tone: ['sincere'],
+  register: 'community',
+  communityContext: 'A supportive conversation where someone recognizes a difficult but constructive action.',
+  socialImplication: 'The speaker is affirming the other person and treating the disclosure as brave.',
+  usageBoundary: { naturalIn: 'Supportive teammates or close friends', beCarefulIn: 'New coworkers', avoidIn: 'Formal client communication without context' },
+  confidence: 'high',
+  uncertainty: 'The exact emotional weight of the issue is not stated.',
+  signals: [
+    { phrase: 'spoke up about the issue', signalType: 'wording', explanation: 'The specific action gives the compliment a sincere subject.' },
+    { phrase: 'fearless behavior', signalType: 'relationship', explanation: 'The phrase directly affirms a difficult action rather than using irony.' },
+  ],
+};
