@@ -1,0 +1,24 @@
+{
+  "name": "sideglance",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p tsconfig.json && vite build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "worker:dev": "wrangler dev worker/index.ts --local --ip 127.0.0.1 --port 8787",
+    "worker:typecheck": "tsc -p worker/tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260820.1",
+    "@playwright/test": "^1.55.0",
+    "@types/node": "^22.15.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.3.5",
+    "vitest": "^3.2.4",
+    "wrangler": "^4.31.0"
+  }
+}

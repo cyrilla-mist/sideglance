@@ -1,0 +1,3 @@
+body { text-rendering: optimizeLegibility; }
+button, textarea, input { font: inherit; }
+:focus-visible { outline: 3px solid var(--brand-blue); outline-offset: 4px; }
