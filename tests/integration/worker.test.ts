@@ -18,4 +18,10 @@ describe('worker health route', () => {
     const response = await worker.fetch(new Request('http://localhost/api/decode', { method: 'POST', body: JSON.stringify({ inputText: 'fearless behavior' }), headers: { 'content-type': 'application/json' } }));
     expect(await response.json()).toMatchObject({ type: 'needs_context', reason: 'ambiguous_phrase' });
   });
+
+  it('does not fall back to fixture or expose details when AI mode lacks a key', async () => {
+    const response = await worker.fetch(new Request('http://localhost/api/decode', { method: 'POST', body: JSON.stringify({ inputText: 'touch grass' }), headers: { 'content-type': 'application/json' } }), { CONTEXT_ENGINE_MODE: 'ai' });
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({ type: 'failed', errorCode: 'missing_api_key', message: 'Context model API key is not configured.' });
+  });
 });

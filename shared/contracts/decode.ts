@@ -40,7 +40,7 @@ export type NeedsContextResponse = {
 
 export type FailedResponse = {
   type: 'failed';
-  errorCode: 'invalid_request' | 'unknown_fixture' | 'invalid_response';
+  errorCode: 'invalid_request' | 'unknown_fixture' | 'invalid_response' | 'context_timeout' | 'context_invalid_json' | 'context_schema_invalid' | 'missing_api_key' | 'model_unavailable';
   message: string;
 };
 

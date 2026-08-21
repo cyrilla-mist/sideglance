@@ -1,0 +1,4 @@
+{
+  "input": "touch grass",
+  "expected": { "communityContext": "internet slang" }
+}

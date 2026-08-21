@@ -1,0 +1,4 @@
+{
+  "input": "you are cooked",
+  "expected": { "contextualMeaning": "negative slang" }
+}

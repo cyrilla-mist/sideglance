@@ -1,0 +1,4 @@
+{
+  "input": "fearless behavior 💀",
+  "expected": { "tone": ["sarcastic", "playful"] }
+}

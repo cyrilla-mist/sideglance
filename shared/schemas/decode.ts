@@ -1,4 +1,5 @@
 import type { DecodeRequest, DecodeResponse, SignalCategory } from '../contracts/decode';
+import { isContextAnalysis } from './context';
 
 const categories: SignalCategory[] = ['community_norm', 'irony', 'dry_humor', 'literal', 'tone'];
 const confidences = ['high', 'medium', 'low'] as const;
@@ -29,7 +30,8 @@ export function isDecodeResponse(value: unknown): value is DecodeResponse {
     return typeof item.id === 'string' && typeof item.quote === 'string' && typeof item.explanation === 'string' && categories.includes(item.category as SignalCategory);
   })) return false;
   const boundary = response.usageBoundary;
-  return Boolean(boundary && typeof boundary === 'object' && typeof (boundary as Record<string, unknown>).natural === 'string' && typeof (boundary as Record<string, unknown>).depends === 'string' && typeof (boundary as Record<string, unknown>).avoid === 'string');
+  return Boolean(boundary && typeof boundary === 'object' && typeof (boundary as Record<string, unknown>).natural === 'string' && typeof (boundary as Record<string, unknown>).depends === 'string' && typeof (boundary as Record<string, unknown>).avoid === 'string')
+    && (response.contextAnalysis === undefined || isContextAnalysis(response.contextAnalysis));
 }
 
 export function assertDecodeResponse(value: unknown): DecodeResponse {
