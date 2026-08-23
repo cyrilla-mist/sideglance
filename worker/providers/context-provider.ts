@@ -15,12 +15,16 @@ export interface ContextModelProvider {
   analyzeContext(input: string, additionalContext?: string): Promise<ContextAnalysis>;
 }
 
+export type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+
+const DEFAULT_PROVIDER_TIMEOUT_MS = 30_000;
+
 export type ContextModelProviderConfig = {
   apiKey?: string;
   endpoint?: string;
   model?: string;
   timeoutMs?: number;
-  fetcher?: typeof fetch;
+  fetcher?: FetchLike;
 };
 
 type ModelResponse = {
@@ -28,30 +32,34 @@ type ModelResponse = {
 };
 
 export class ModelContextProvider implements ContextModelProvider {
-  private readonly fetcher: typeof fetch;
+  private readonly fetcher: FetchLike;
 
   constructor(private readonly config: ContextModelProviderConfig) {
-    this.fetcher = config.fetcher ?? fetch;
+    this.fetcher = config.fetcher ?? defaultFetch;
   }
 
   async analyzeContext(input: string, additionalContext?: string): Promise<ContextAnalysis> {
     if (!this.config.apiKey) throw new ContextProviderError('missing_api_key', 'Context model API key is not configured.');
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), this.config.timeoutMs ?? 15000);
+    const timeout = setTimeout(() => controller.abort(), this.config.timeoutMs ?? DEFAULT_PROVIDER_TIMEOUT_MS);
     try {
       const prompt = buildContextAnalysisPrompt(input, additionalContext);
-      const response = await this.fetcher(this.config.endpoint ?? 'https://api.openai.com/v1/chat/completions', {
+      const requestUrl = resolveChatCompletionsEndpoint(this.config.endpoint ?? 'https://api.openai.com/v1/chat/completions');
+      const requestBody = {
+        model: this.config.model ?? 'gpt-4o-mini',
+        temperature: 0,
+        response_format: { type: 'json_object' as const },
+        messages: [{ role: 'system', content: prompt.system }, { role: 'user', content: prompt.user }],
+      };
+      const response = await this.fetcher(requestUrl, {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${this.config.apiKey}` },
-        body: JSON.stringify({
-          model: this.config.model ?? 'gpt-4o-mini',
-          temperature: 0,
-          response_format: { type: 'json_object' },
-          messages: [{ role: 'system', content: prompt.system }, { role: 'user', content: prompt.user }],
-        }),
+        body: JSON.stringify(requestBody),
         signal: controller.signal,
       });
-      if (!response.ok) throw new ContextProviderError('model_unavailable', 'Context model is unavailable.');
+      if (!response.ok) {
+        throw new ContextProviderError('model_unavailable', 'Context model is unavailable.');
+      }
       let payload: unknown;
       try { payload = await response.json() as unknown; } catch { throw new ContextProviderError('context_invalid_json', 'Context model returned invalid JSON.'); }
       const content = extractContent(payload);
@@ -66,6 +74,15 @@ export class ModelContextProvider implements ContextModelProvider {
       clearTimeout(timeout);
     }
   }
+}
+
+const defaultFetch: FetchLike = (input, init) => globalThis.fetch(input, init);
+
+function resolveChatCompletionsEndpoint(endpoint: string): string {
+  const url = new URL(endpoint);
+  if (url.pathname.endsWith('/chat/completions')) return url.toString();
+  url.pathname = `${url.pathname.replace(/\/$/, '')}/chat/completions`;
+  return url.toString();
 }
 
 function extractContent(payload: unknown): string {

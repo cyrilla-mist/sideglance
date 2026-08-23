@@ -43,7 +43,11 @@ function json(value: DecodeResponse, status: number): Response { return Response
 
 function createContextEngine(env: WorkerEnv): ContextEngine {
   if (env.CONTEXT_ENGINE_MODE === 'ai') {
-    return new AIContextEngine(new ModelContextProvider({ apiKey: env.MODEL_API_KEY, endpoint: env.MODEL_API_URL, model: env.MODEL_NAME }));
+    return new AIContextEngine(new ModelContextProvider({
+      apiKey: env.MODEL_API_KEY,
+      endpoint: env.MODEL_API_URL,
+      model: env.MODEL_NAME,
+    }));
   }
   return new MockContextEngine();
 }
