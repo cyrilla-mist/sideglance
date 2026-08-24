@@ -1,0 +1,27 @@
+{
+  "runId": "task09b-powershell-friday-smoke",
+  "transportType": "evaluation-only PowerShell Invoke-WebRequest bridge",
+  "productionWorkerPathUsed": false,
+  "apiKeyConfigured": true,
+  "model": "gemini-3.7-flash",
+  "httpStatus": 503,
+  "latencyMs": 12099,
+  "powershellProcessStarted": true,
+  "providerResponseReceived": true,
+  "assistantContentReached": false,
+  "envelopeParse": "not_reached",
+  "jsonParse": "not_reached",
+  "contractGuardValidation": "not_reached",
+  "evaluationResult": null,
+  "safeFailureStage": "http_error",
+  "error": "Context model is unavailable.",
+  "diagnostics": {
+    "stage": "http_error",
+    "status": 503,
+    "contentType": "application/json",
+    "elapsedMs": 12099,
+    "assistantContentReached": false,
+    "envelopeParsed": false,
+    "providerMessage": "UNAVAILABLE: model temporarily experiencing high demand"
+  }
+}

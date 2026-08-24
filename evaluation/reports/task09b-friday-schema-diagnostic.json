@@ -1,0 +1,52 @@
+{
+  "runId": "task09b-friday-schema-diagnostic",
+  "transport": "evaluation-only PowerShell bridge",
+  "productionWorkerPathUsed": false,
+  "apiKeyConfigured": true,
+  "attempts": [
+    {
+      "attempt": 1,
+      "httpStatus": 503,
+      "latencyMs": 18971,
+      "stage": "http_error"
+    },
+    {
+      "attempt": 2,
+      "httpStatus": 503,
+      "latencyMs": 20275,
+      "stage": "http_error"
+    }
+  ],
+  "diagnosticEvidence": "No assistant JSON was captured in this diagnostic run; both bounded attempts returned HTTP 503. The earlier HTTP 200 smoke report recorded only the generic contract-guard failure and no raw or structured output.",
+  "guard": {
+    "used": false,
+    "validator": "isContextAnalysis hand-written contract guard",
+    "issueCount": 0,
+    "issues": []
+  },
+  "outputShape": {
+    "actualType": "undefined"
+  },
+  "enumMismatches": [],
+  "promptSchemaDrift": {
+    "classification": "none_observed",
+    "findings": [
+      "Prompt and contract use the same required field names and object/array shapes; prompt examples use valid enum values. Full enum vocabulary is not enumerated in the prompt."
+    ]
+  },
+  "evidence": {
+    "total": 0,
+    "exactMatches": 0,
+    "invalid": 0
+  },
+  "semanticSnapshot": {
+    "contextualMeaning": "missing",
+    "tone": "missing",
+    "register": "missing",
+    "communityContext": "missing",
+    "confidence": "missing",
+    "uncertaintyPresent": false
+  },
+  "rootCause": "other",
+  "secondaryCategories": ["contract_guard_failure_observed_but_not_reproducible", "insufficient_mismatch_evidence"]
+}

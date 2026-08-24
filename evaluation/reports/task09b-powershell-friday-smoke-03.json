@@ -1,0 +1,48 @@
+{
+  "runId": "task09b-powershell-friday-smoke-03",
+  "transportType": "evaluation-only PowerShell Invoke-WebRequest bridge",
+  "productionWorkerPathUsed": false,
+  "apiKeyConfigured": true,
+  "model": "gemini-3.7-flash",
+  "attempts": [
+    {
+      "attempt": 1,
+      "timeoutBudgetMs": 30000,
+      "httpStatus": 503,
+      "latencyMs": 10455,
+      "category": "transient_provider_error",
+      "responseReached": true,
+      "retryPerformed": true,
+      "diagnostics": {
+        "stage": "http_error",
+        "assistantContentReached": false,
+        "envelopeParsed": false
+      },
+      "backoffSeconds": 20
+    },
+    {
+      "attempt": 2,
+      "timeoutBudgetMs": 30000,
+      "httpStatus": 200,
+      "latencyMs": 9163,
+      "category": "context_schema_error",
+      "responseReached": true,
+      "retryPerformed": false,
+      "diagnostics": {
+        "stage": "context_schema_error",
+        "assistantContentReached": true,
+        "envelopeParsed": true
+      }
+    }
+  ],
+  "overallLatencyMs": 39626,
+  "final": {
+    "status": "fail",
+    "envelopeParse": "pass",
+    "assistantContentReached": true,
+    "jsonParse": "pass",
+    "contractGuardValidation": "fail",
+    "failureCategory": "context_schema_error",
+    "error": "Context model returned an invalid context schema."
+  }
+}

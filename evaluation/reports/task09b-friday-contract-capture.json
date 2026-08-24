@@ -1,0 +1,52 @@
+{
+  "runId": "task09b-friday-contract-capture",
+  "transport": "evaluation-only PowerShell bridge",
+  "productionWorkerPathUsed": false,
+  "apiKeyConfigured": true,
+  "parse": {
+    "envelope": "not_reached",
+    "assistantContent": "not_reached",
+    "json": "not_reached"
+  },
+  "attempts": [
+    {
+      "attempt": 1,
+      "httpStatus": null,
+      "latencyMs": 30029,
+      "stage": "timeout"
+    }
+  ],
+  "guard": {
+    "validator": "isContextAnalysis via diagnoseContextAnalysis",
+    "valid": false,
+    "issueCount": 0,
+    "issues": []
+  },
+  "outputShape": {
+    "actualType": "undefined"
+  },
+  "enumMismatches": [],
+  "promptSchemaDrift": {
+    "classification": "none_observed",
+    "findings": [
+      "Prompt and contract use the same required field names and object/array shapes; prompt examples use valid enum values. Full enum vocabulary is not enumerated in the prompt."
+    ]
+  },
+  "evidence": {
+    "total": 0,
+    "exactMatches": 0,
+    "invalid": 0
+  },
+  "semanticSnapshot": {
+    "developerFridayRiskContext": "unknown",
+    "sarcasmIronicPraise": "unknown",
+    "weekendImplication": "unknown",
+    "tone": "missing",
+    "register": "missing",
+    "communityContext": "missing",
+    "confidence": "missing",
+    "uncertaintyPresent": false
+  },
+  "rootCause": "other",
+  "secondaryCategories": []
+}

@@ -1,0 +1,30 @@
+{
+  "runId": "task09b-real-ai-run-01",
+  "mode": "host-ai",
+  "executionEnvironment": "host-side Node direct Gemini",
+  "workerPathUsed": false,
+  "apiKeyConfigured": true,
+  "model": "gemini-3.7-flash",
+  "endpoint": "https://generativelanguage.googleapis.com/v1beta/openai/",
+  "startedAt": "2026-08-23T14:54:28.984Z",
+  "finishedAt": "2026-08-23T14:54:39.647Z",
+  "cases": [
+    {
+      "caseId": "task09b-friday-merge",
+      "modelResult": null,
+      "evaluationResult": null,
+      "latencyMs": 10661,
+      "failureCategories": [
+        "provider_error"
+      ],
+      "jsonParse": "not_reached",
+      "contractGuardValidation": "not_reached",
+      "error": "Context model is unavailable."
+    }
+  ],
+  "preflight": {
+    "status": "blocked_after_smoke",
+    "aiContextGateEngine": "not_implemented",
+    "goldSetRun": false
+  }
+}

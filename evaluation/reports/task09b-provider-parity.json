@@ -1,0 +1,62 @@
+{
+  "runId": "task09b-provider-parity",
+  "mode": "host-ai-provider-parity",
+  "apiKeyConfigured": true,
+  "model": "gemini-3.7-flash",
+  "endpoint": "https://generativelanguage.googleapis.com/v1beta/openai/",
+  "previousDiagnostic": {
+    "runId": "task09b-provider-parity",
+    "mode": "host-ai-provider-parity",
+    "apiKeyConfigured": true,
+    "model": "gemini-3.7-flash",
+    "endpoint": "https://generativelanguage.googleapis.com/v1beta/openai/",
+    "control": {
+      "pass": false,
+      "diagnostics": {
+        "stage": "fetch_error",
+        "status": null,
+        "contentType": null,
+        "elapsedMs": 10625,
+        "assistantContentReached": false,
+        "envelopeParsed": false
+      },
+      "error": "Context model is unavailable.",
+      "failureStage": "fetch_error",
+      "latencyMs": 10626
+    },
+    "fridayWithoutResponseFormat": {
+      "status": "not_run"
+    },
+    "responseFormatAssessment": {
+      "currentShape": {
+        "type": "json_object"
+      },
+      "revisedRequestSent": false
+    }
+  },
+  "rawNodeControl": {
+    "pass": false,
+    "status": null,
+    "latencyMs": 10639,
+    "responseReached": false,
+    "contentExists": false,
+    "errorName": "TypeError",
+    "errorMessage": "fetch failed",
+    "causeCode": "UND_ERR_CONNECT_TIMEOUT"
+  },
+  "control": {
+    "pass": false,
+    "error": "Not run because same-process raw Node fetch failed.",
+    "failureStage": "not_run",
+    "latencyMs": 0
+  },
+  "fridayWithoutResponseFormat": {
+    "status": "not_run"
+  },
+  "responseFormatAssessment": {
+    "currentShape": {
+      "type": "json_object"
+    },
+    "revisedRequestSent": false
+  }
+}

@@ -3,9 +3,28 @@ import { assertContextAnalysis } from '../../shared/schemas/context';
 import { buildContextAnalysisPrompt } from '../prompts/context-analysis';
 
 export type ContextProviderErrorCode = 'context_timeout' | 'context_invalid_json' | 'context_schema_invalid' | 'missing_api_key' | 'model_unavailable';
+export type ContextProviderFailureStage = 'env_loading' | 'request_construction' | 'fetch_error' | 'timeout' | 'http_error' | 'api_envelope_error' | 'missing_content' | 'model_json_error' | 'context_schema_error';
+
+export type ContextProviderDiagnostics = {
+  stage: ContextProviderFailureStage | 'response_received';
+  status: number | null;
+  contentType: string | null;
+  elapsedMs: number;
+  assistantContentReached: boolean;
+  envelopeParsed: boolean;
+  providerMessage?: string;
+  errorName?: string;
+  errorMessage?: string;
+  errorCode?: string;
+  causeName?: string;
+  causeCode?: string;
+  causeMessage?: string;
+  aborted?: boolean;
+  signalAborted?: boolean;
+};
 
 export class ContextProviderError extends Error {
-  constructor(public readonly code: ContextProviderErrorCode, message: string) {
+  constructor(public readonly code: ContextProviderErrorCode, message: string, public readonly diagnostics?: ContextProviderDiagnostics) {
     super(message);
     this.name = 'ContextProviderError';
   }
@@ -25,11 +44,14 @@ export type ContextModelProviderConfig = {
   model?: string;
   timeoutMs?: number;
   fetcher?: FetchLike;
+  responseFormat?: boolean;
 };
 
 type ModelResponse = {
   choices?: Array<{ message?: { content?: string } }>;
 };
+
+type ProviderContentResult = ContextProviderDiagnostics & { content: string };
 
 export class ModelContextProvider implements ContextModelProvider {
   private readonly fetcher: FetchLike;
@@ -38,40 +60,74 @@ export class ModelContextProvider implements ContextModelProvider {
     this.fetcher = config.fetcher ?? defaultFetch;
   }
 
+  async diagnoseMinimal(): Promise<ContextProviderDiagnostics> {
+    const result = await this.requestContent('You are a connectivity test.', 'Reply with exactly: ok', false);
+    return {
+      stage: result.stage,
+      status: result.status,
+      contentType: result.contentType,
+      elapsedMs: result.elapsedMs,
+      assistantContentReached: result.assistantContentReached,
+      envelopeParsed: result.envelopeParsed,
+    };
+  }
+
   async analyzeContext(input: string, additionalContext?: string): Promise<ContextAnalysis> {
     if (!this.config.apiKey) throw new ContextProviderError('missing_api_key', 'Context model API key is not configured.');
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.config.timeoutMs ?? DEFAULT_PROVIDER_TIMEOUT_MS);
     try {
       const prompt = buildContextAnalysisPrompt(input, additionalContext);
+      const result = await this.requestContent(prompt.system, prompt.user, this.config.responseFormat !== false, controller.signal);
+      let parsed: unknown;
+      try { parsed = JSON.parse(result.content) as unknown; } catch { throw new ContextProviderError('context_invalid_json', 'Context model returned invalid JSON.', { ...result, stage: 'model_json_error' }); }
+      try { return assertContextAnalysis(parsed); } catch { throw new ContextProviderError('context_schema_invalid', 'Context model returned an invalid context schema.', { ...result, stage: 'context_schema_error' }); }
+    } catch (error) {
+      if (error instanceof ContextProviderError) throw error;
+      throw new ContextProviderError('model_unavailable', 'Context model is unavailable.', { stage: 'request_construction', status: null, contentType: null, elapsedMs: 0, assistantContentReached: false, envelopeParsed: false });
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  private async requestContent(system: string, user: string, includeResponseFormat: boolean, providedSignal?: AbortSignal): Promise<ProviderContentResult> {
+    if (!this.config.apiKey) throw new ContextProviderError('missing_api_key', 'Context model API key is not configured.', { stage: 'env_loading', status: null, contentType: null, elapsedMs: 0, assistantContentReached: false, envelopeParsed: false });
+    const started = Date.now();
+    const controller = providedSignal ? undefined : new AbortController();
+    const signal = providedSignal ?? controller!.signal;
+    const timeout = controller ? setTimeout(() => controller.abort(), this.config.timeoutMs ?? DEFAULT_PROVIDER_TIMEOUT_MS) : undefined;
+    const baseDiagnostics = (stage: ContextProviderDiagnostics['stage'], status: number | null, contentType: string | null, extra: Partial<ContextProviderDiagnostics> = {}): ContextProviderDiagnostics => ({ stage, status, contentType, elapsedMs: Date.now() - started, assistantContentReached: false, envelopeParsed: false, aborted: false, signalAborted: signal.aborted, ...extra });
+    try {
       const requestUrl = resolveChatCompletionsEndpoint(this.config.endpoint ?? 'https://api.openai.com/v1/chat/completions');
       const requestBody = {
         model: this.config.model ?? 'gpt-4o-mini',
         temperature: 0,
-        response_format: { type: 'json_object' as const },
-        messages: [{ role: 'system', content: prompt.system }, { role: 'user', content: prompt.user }],
+        ...(includeResponseFormat ? { response_format: { type: 'json_object' as const } } : {}),
+        messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
       };
       const response = await this.fetcher(requestUrl, {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${this.config.apiKey}` },
         body: JSON.stringify(requestBody),
-        signal: controller.signal,
+        signal,
       });
+      const contentType = response.headers.get('content-type');
       if (!response.ok) {
-        throw new ContextProviderError('model_unavailable', 'Context model is unavailable.');
+        const responseText = await response.text().catch(() => '');
+        throw new ContextProviderError('model_unavailable', 'Context model is unavailable.', { ...baseDiagnostics('http_error', response.status, contentType), providerMessage: safeProviderMessage(responseText) });
       }
       let payload: unknown;
-      try { payload = await response.json() as unknown; } catch { throw new ContextProviderError('context_invalid_json', 'Context model returned invalid JSON.'); }
+      try { payload = await response.json() as unknown; } catch { throw new ContextProviderError('context_invalid_json', 'Context model returned invalid JSON.', baseDiagnostics('api_envelope_error', response.status, contentType)); }
       const content = extractContent(payload);
-      let parsed: unknown;
-      try { parsed = JSON.parse(content) as unknown; } catch { throw new ContextProviderError('context_invalid_json', 'Context model returned invalid JSON.'); }
-      try { return assertContextAnalysis(parsed); } catch { throw new ContextProviderError('context_schema_invalid', 'Context model returned an invalid context schema.'); }
+      if (!content) throw new ContextProviderError('context_invalid_json', 'Context model returned no JSON content.', baseDiagnostics('missing_content', response.status, contentType, { envelopeParsed: true }));
+      return { ...baseDiagnostics('response_received', response.status, contentType, { envelopeParsed: true, assistantContentReached: true }), content };
     } catch (error) {
       if (error instanceof ContextProviderError) throw error;
-      if (error instanceof DOMException && error.name === 'AbortError') throw new ContextProviderError('context_timeout', 'Context model request timed out.');
-      throw new ContextProviderError('model_unavailable', 'Context model is unavailable.');
+      const exception = describeFetchError(error, signal.aborted);
+      if (exception.aborted) throw new ContextProviderError('context_timeout', 'Context model request timed out.', baseDiagnostics('timeout', null, null, exception));
+      throw new ContextProviderError('model_unavailable', 'Context model is unavailable.', baseDiagnostics('fetch_error', null, null, exception));
     } finally {
-      clearTimeout(timeout);
+      if (timeout) clearTimeout(timeout);
     }
   }
 }
@@ -89,6 +145,36 @@ function extractContent(payload: unknown): string {
   if (!payload || typeof payload !== 'object') throw new ContextProviderError('context_invalid_json', 'Context model returned an invalid response.');
   const response = payload as ModelResponse;
   const content = response.choices?.[0]?.message?.content;
-  if (typeof content !== 'string' || !content.trim()) throw new ContextProviderError('context_invalid_json', 'Context model returned no JSON content.');
-  return content;
+  return typeof content === 'string' ? content.trim() : '';
+}
+
+function safeProviderMessage(responseText: string): string {
+  try {
+    const payload = JSON.parse(responseText) as { error?: { type?: unknown; message?: unknown } };
+    const message = payload.error?.message;
+    if (typeof message === 'string') return redactDiagnosticText(message);
+  } catch { /* Use bounded text below. */ }
+  return redactDiagnosticText(responseText) || 'Provider returned an error.';
+}
+
+function redactDiagnosticText(value: string): string {
+  return value
+    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [redacted]')
+    .replace(/https?:\/\/[^\s)]+/gi, '[url redacted]')
+    .replace(/\b\d{1,3}(?:\.\d{1,3}){3}\b/g, '[address redacted]')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 500);
+}
+
+function describeFetchError(error: unknown, signalAborted: boolean): Pick<ContextProviderDiagnostics, 'errorName' | 'errorMessage' | 'errorCode' | 'causeName' | 'causeCode' | 'causeMessage' | 'aborted' | 'signalAborted'> {
+  const value = error as { name?: unknown; message?: unknown; code?: unknown; cause?: { name?: unknown; message?: unknown; code?: unknown } };
+  const cause = value.cause;
+  const errorName = typeof value.name === 'string' ? value.name : 'Error';
+  const errorMessage = typeof value.message === 'string' ? redactDiagnosticText(value.message) : 'Provider fetch failed.';
+  const errorCode = typeof value.code === 'string' ? value.code : undefined;
+  const causeName = cause && typeof cause.name === 'string' ? cause.name : undefined;
+  const causeCode = cause && typeof cause.code === 'string' ? cause.code : undefined;
+  const causeMessage = cause && typeof cause.message === 'string' ? redactDiagnosticText(cause.message) : undefined;
+  return { errorName, errorMessage, errorCode, causeName, causeCode, causeMessage, aborted: signalAborted || errorName === 'AbortError', signalAborted };
 }

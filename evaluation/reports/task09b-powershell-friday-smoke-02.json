@@ -1,0 +1,35 @@
+{
+  "runId": "task09b-powershell-friday-smoke-02",
+  "transportType": "evaluation-only PowerShell Invoke-WebRequest bridge",
+  "productionWorkerPathUsed": false,
+  "apiKeyConfigured": true,
+  "model": "gemini-3.7-flash",
+  "httpStatus": null,
+  "latencyMs": 30044,
+  "attempts": [
+    { "attempt": 1, "status": 503, "latencyMs": 7141, "category": "transient_provider_error" },
+    { "attempt": 2, "status": null, "latencyMs": 2901, "category": "powershell_transport_error" }
+  ],
+  "retryPerformed": true,
+  "powershellProcessStarted": true,
+  "providerResponseReceived": false,
+  "assistantContentReached": false,
+  "envelopeParse": "not_reached",
+  "jsonParse": "not_reached",
+  "contractGuardValidation": "not_reached",
+  "evaluationResult": null,
+  "safeFailureStage": "timeout",
+  "error": "Context model request timed out.",
+  "diagnostics": {
+    "stage": "timeout",
+    "status": null,
+    "contentType": null,
+    "elapsedMs": 30044,
+    "assistantContentReached": false,
+    "envelopeParsed": false,
+    "aborted": true,
+    "signalAborted": true,
+    "errorName": "Error",
+    "errorMessage": "powershell_transport_error"
+  }
+}
