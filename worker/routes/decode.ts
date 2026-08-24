@@ -37,7 +37,7 @@ export async function handleDecode(request: Request, env: WorkerEnv = {}): Promi
     if (decoded.type !== 'decoded') return json(decoded, 200);
     return json(assertDecodeResponse(contextAnalysis ? { ...decoded, contextAnalysis } : decoded), 200);
   } catch (error) {
-    if (error instanceof ContextProviderError) return json({ type: 'failed', errorCode: error.code === 'hallucinated_evidence' ? 'model_unavailable' : error.code, message: error.code === 'hallucinated_evidence' ? 'We could not verify the model explanation.' : error.message }, 502);
+    if (error instanceof ContextProviderError) return json({ type: 'failed', errorCode: error.code === 'hallucinated_evidence' || error.code === 'invalid_evidence_reference' ? 'model_unavailable' : error.code, message: error.code === 'hallucinated_evidence' || error.code === 'invalid_evidence_reference' ? 'We could not verify the model explanation.' : error.message }, 502);
     if (error instanceof ContextGateError) return json({ type: 'failed', errorCode: contextGateErrorCode(error), message: error.stage === 'missing_api_key' ? 'Context model API key is not configured.' : 'Context gate is unavailable.' }, 502);
     return json({ type: 'failed', errorCode: 'invalid_request', message: error instanceof Error ? error.message : 'Invalid decode request.' }, 400);
   }

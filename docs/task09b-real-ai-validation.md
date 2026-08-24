@@ -132,3 +132,11 @@ The 09B.15 AI Context Gate checkpoint was frozen in commit `1f12005` (`feat: add
 An invalid evidence quote is an internal `hallucinated_evidence` provider failure and cannot enter the decoded response. The public route returns a safe generic failure instead of exposing provider internals. The existing editorial evidence flow now renders the verified `evidenceQuote` directly.
 
 Calibration Round 2 used `gemini-3.5-flash`, `reasoning_effort: low`, and the evaluation-only PowerShell bridge. Gate and interpreter each returned HTTP `200`; ContextAnalysis contract validation passed; semantic checks passed; grounding was `2/3` exact with one invalid quote. Final classification: `MODEL_GROUNDING_NONCOMPLIANCE`. No Cases B-D, Gold Set, or Prompt Calibration Round 3 were run.
+
+## 09B.17 Deterministic evidence-reference architecture
+
+The grounding checkpoint was frozen in commit `6bb47b6` (`feat: validate context evidence against source`). The probabilistic layer no longer generates evidence text. `buildEvidenceCatalog` creates stable `E1`, `E2`, ... units from non-empty source lines in the original input and explicit additional context, preserving each line verbatim.
+
+The model-only contract uses `evidenceRef`; `resolveContextEvidence` maps each reference to a catalog unit and creates the public `ContextSignal.evidenceQuote`. Unknown references hard-fail as `invalid_evidence_reference`; there is no fuzzy repair or fallback. The final pipeline is model envelope → JSON → model contract → reference resolution → final contract → exact grounding validator → decoded UI. The public `ContextAnalysis` and editorial UI remain unchanged except that displayed quotes now come from the deterministic resolver.
+
+Friday reference calibration used `gemini-3.5-flash` with low reasoning through the evaluation-only PowerShell bridge. Gate and interpreter returned HTTP `200`; all 3 evidence references resolved; final grounding was `3/3` exact with `0` invalid; semantic requirements passed and unsupported claims were absent. Classification: `GROUNDING_REFERENCE_PASS`. This is not a four-case preflight: Cases B-D and Gold Set were not run.

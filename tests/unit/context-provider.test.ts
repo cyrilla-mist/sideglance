@@ -8,10 +8,11 @@ const analysis = {
   usageBoundary: { naturalIn: 'Online communities', beCarefulIn: 'Professional settings', avoidIn: 'Formal reports' },
   confidence: 'medium', uncertainty: 'Exact intent depends on context.',
 };
+const modelAnalysis = { ...analysis, signals: [{ phrase: 'touch grass', signalType: 'wording', explanation: 'A familiar admonition.', evidenceRef: 'E1' }] };
 
 describe('ModelContextProvider', () => {
   it('parses and validates a provider JSON response', async () => {
-    const provider = new ModelContextProvider({ apiKey: 'test-key', fetcher: async () => new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(analysis) } }] })) });
+    const provider = new ModelContextProvider({ apiKey: 'test-key', fetcher: async () => new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(modelAnalysis) } }] })) });
     await expect(provider.analyzeContext('touch grass')).resolves.toEqual(analysis);
   });
 
@@ -21,14 +22,14 @@ describe('ModelContextProvider', () => {
   });
 
   it('rejects JSON that does not satisfy ContextAnalysis', async () => {
-    const provider = new ModelContextProvider({ apiKey: 'test-key', fetcher: async () => new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ ...analysis, confidence: 'certain' }) } }] })) });
+    const provider = new ModelContextProvider({ apiKey: 'test-key', fetcher: async () => new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ ...modelAnalysis, confidence: 'certain' }) } }] })) });
     await expect(provider.analyzeContext('touch grass')).rejects.toMatchObject({ code: 'context_schema_invalid' });
   });
 
   it('rejects schema-valid output whose evidence is not in the supplied source', async () => {
-    const invalidEvidence = { ...analysis, signals: [{ ...analysis.signals[0], evidenceQuote: 'invented wording' }] };
+    const invalidEvidence = { ...modelAnalysis, signals: [{ ...modelAnalysis.signals[0], evidenceRef: 'E99' }] };
     const provider = new ModelContextProvider({ apiKey: 'test-key', fetcher: async () => new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(invalidEvidence) } }] })) });
-    await expect(provider.analyzeContext('touch grass')).rejects.toMatchObject({ code: 'hallucinated_evidence', diagnostics: { stage: 'evidence_grounding_error', evidenceTotal: 1, evidenceExactMatches: 0, evidenceInvalid: 1 } });
+    await expect(provider.analyzeContext('touch grass')).rejects.toMatchObject({ code: 'invalid_evidence_reference', diagnostics: { stage: 'evidence_reference_error', evidenceTotal: 1, evidenceExactMatches: 0, evidenceInvalid: 1 } });
   });
 
   it('reports a missing API key safely', async () => {

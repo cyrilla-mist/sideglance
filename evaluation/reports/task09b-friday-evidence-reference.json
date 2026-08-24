@@ -1,0 +1,53 @@
+{
+  "runId": "task09b-friday-evidence-reference",
+  "transport": "evaluation-only PowerShell bridge",
+  "productionWorkerPathUsed": false,
+  "model": "gemini-3.5-flash",
+  "reasoningEffort": "low",
+  "attempts": [
+    {
+      "attempt": 1,
+      "gate": {
+        "status": "ready",
+        "confidence": "high",
+        "reason": "context_sufficient",
+        "contract": "pass"
+      },
+      "interpreterInvoked": true,
+      "requests": [
+        {
+          "stage": "gate",
+          "status": 200,
+          "latencyMs": 17311
+        },
+        {
+          "stage": "interpreter",
+          "status": 200,
+          "latencyMs": 23955
+        }
+      ],
+      "latencyMs": 41271,
+      "modelContract": "pass",
+      "evidenceRefs": {
+        "count": 3,
+        "valid": 3,
+        "invalid": 0
+      },
+      "finalContextAnalysisContract": "pass",
+      "grounding": {
+        "total": 3,
+        "exactMatches": 3,
+        "invalid": 0
+      },
+      "semantic": {
+        "developerFridayContext": true,
+        "ironicPraise": true,
+        "weekendImplication": true,
+        "pass": true
+      },
+      "unsupportedClaims": [],
+      "verdict": "GROUNDING_REFERENCE_PASS"
+    }
+  ],
+  "finalClassification": "GROUNDING_REFERENCE_PASS"
+}

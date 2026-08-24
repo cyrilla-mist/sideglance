@@ -1,10 +1,13 @@
 import type { ContextAnalysis } from '../../shared/contracts/context';
 import { assertContextAnalysis } from '../../shared/schemas/context';
 import { validateContextEvidence } from '../../shared/schemas/context-evidence';
+import { buildEvidenceCatalog } from '../../shared/context/evidence-catalog';
+import { resolveContextEvidence } from '../../shared/context/evidence-resolver';
+import { assertModelContextAnalysis } from '../../shared/schemas/model-context';
 import { buildContextAnalysisPrompt } from '../prompts/context-analysis';
 
-export type ContextProviderErrorCode = 'context_timeout' | 'context_invalid_json' | 'context_schema_invalid' | 'hallucinated_evidence' | 'missing_api_key' | 'model_unavailable';
-export type ContextProviderFailureStage = 'env_loading' | 'request_construction' | 'fetch_error' | 'timeout' | 'http_error' | 'api_envelope_error' | 'missing_content' | 'model_json_error' | 'context_schema_error' | 'evidence_grounding_error';
+export type ContextProviderErrorCode = 'context_timeout' | 'context_invalid_json' | 'context_schema_invalid' | 'invalid_evidence_reference' | 'hallucinated_evidence' | 'missing_api_key' | 'model_unavailable';
+export type ContextProviderFailureStage = 'env_loading' | 'request_construction' | 'fetch_error' | 'timeout' | 'http_error' | 'api_envelope_error' | 'missing_content' | 'model_json_error' | 'model_context_schema_error' | 'context_schema_error' | 'evidence_reference_error' | 'evidence_grounding_error';
 
 export type ContextProviderDiagnostics = {
   stage: ContextProviderFailureStage | 'response_received';
@@ -81,12 +84,17 @@ export class ModelContextProvider implements ContextModelProvider {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.config.timeoutMs ?? DEFAULT_PROVIDER_TIMEOUT_MS);
     try {
-      const prompt = buildContextAnalysisPrompt(input, additionalContext);
+      const evidenceCatalog = buildEvidenceCatalog(input, additionalContext);
+      const prompt = buildContextAnalysisPrompt(input, additionalContext, evidenceCatalog);
       const result = await this.requestContent(prompt.system, prompt.user, this.config.responseFormat !== false, controller.signal);
       let parsed: unknown;
       try { parsed = JSON.parse(result.content) as unknown; } catch { throw new ContextProviderError('context_invalid_json', 'Context model returned invalid JSON.', { ...result, stage: 'model_json_error' }); }
+      let modelAnalysis;
+      try { modelAnalysis = assertModelContextAnalysis(parsed); } catch { throw new ContextProviderError('context_schema_invalid', 'Context model returned an invalid context schema.', { ...result, stage: 'model_context_schema_error' }); }
+      const resolved = resolveContextEvidence(modelAnalysis, evidenceCatalog);
+      if (!resolved.valid || !resolved.analysis) throw new ContextProviderError('invalid_evidence_reference', 'Context model returned an invalid evidence reference.', { ...result, stage: 'evidence_reference_error', evidenceTotal: resolved.total, evidenceExactMatches: resolved.validRefs, evidenceInvalid: resolved.invalid.length });
       let analysis: ContextAnalysis;
-      try { analysis = assertContextAnalysis(parsed); } catch { throw new ContextProviderError('context_schema_invalid', 'Context model returned an invalid context schema.', { ...result, stage: 'context_schema_error' }); }
+      try { analysis = assertContextAnalysis(resolved.analysis); } catch { throw new ContextProviderError('context_schema_invalid', 'Resolved context analysis has an invalid schema.', { ...result, stage: 'context_schema_error' }); }
       const grounding = validateContextEvidence(analysis, [input, additionalContext ?? ''].filter(Boolean).join('\n'));
       if (!grounding.valid) throw new ContextProviderError('hallucinated_evidence', 'Context model returned unsupported evidence.', { ...result, stage: 'evidence_grounding_error', evidenceTotal: grounding.total, evidenceExactMatches: grounding.exactMatches, evidenceInvalid: grounding.invalid.length });
       return analysis;
