@@ -1,0 +1,61 @@
+{
+  "runId": "task09b-four-case-preflight",
+  "transport": "evaluation-only PowerShell bridge",
+  "productionWorkerPathUsed": false,
+  "model": "gemini-3.5-flash",
+  "reasoningEffort": "low",
+  "casesRequested": 4,
+  "casesRun": 1,
+  "overallVerdict": "FAIL",
+  "results": [
+    {
+      "case": "A",
+      "model": "gemini-3.5-flash",
+      "attempt": 1,
+      "gate": {
+        "status": "ready",
+        "confidence": "high",
+        "reason": "context_sufficient",
+        "hasQuestion": false,
+        "hasMissingInformation": false,
+        "sufficiency": {
+          "toneJudgment": true,
+          "socialImplication": true,
+          "usageBoundary": true
+        }
+      },
+      "gateContract": "pass",
+      "interpreterInvoked": true,
+      "httpAttempts": [
+        {
+          "stage": "gate",
+          "status": 200,
+          "latencyMs": 15109
+        },
+        {
+          "stage": "interpreter",
+          "status": 200,
+          "latencyMs": 25482
+        }
+      ],
+      "latencyMs": 40593,
+      "contextAnalysisContract": "pass",
+      "semantic": {
+        "pass": true,
+        "checks": {
+          "developerContext": true,
+          "ironicPraise": true,
+          "weekendRisk": true
+        }
+      },
+      "unsupportedClaims": [],
+      "grounding": {
+        "formalEvidence": "not_enforced_by_current_contract",
+        "specificCueCount": 3,
+        "exactCueCount": 2,
+        "invalid": 1
+      },
+      "verdict": "FAIL"
+    }
+  ]
+}

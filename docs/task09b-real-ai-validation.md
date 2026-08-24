@@ -116,3 +116,11 @@ Production Worker transport remains unvalidated. Local Node/workerd has Google A
 ## 09B.11 Friday real contract capture
 
 The clean checkpoint was retried once with the existing bounded policy. Attempt 1 returned HTTP `503` in 9,611 ms and was classified as `provider_temporarily_unavailable`. Attempt 2 used a fresh child/provider/controller but timed out after 30,020 ms without an HTTP response. Because no attempt returned HTTP `200`, envelope parsing, assistant extraction, JSON parsing, and contract diagnosis were not reached. The primary result is `evaluation_transport_timeout`, with `provider_temporarily_unavailable` as a secondary category. No contract mismatch can be inferred from this run, and no code, prompt, model, or contract change was made.
+
+## 09B.15 Four-case real AI preflight
+
+The calibration checkpoint was frozen before gate work in commit `94448e3` (`refine: align context prompt with contract vocabulary`). Static grounding audit confirmed that `ContextAnalysis` has no formal evidence or quote field, and `ContextEvaluator` does not enforce source grounding; the earlier `0 / 0 / 0` evidence result therefore reflects the absent contract field and non-enforcing evaluator.
+
+`AIContextGateEngine` now uses the existing gate result vocabulary, an injected `FetchLike` seam, a bounded 30-second AbortController, and JSON contract validation. The gate is evaluated before `AIContextEngine`; a `needs_context` result does not invoke the interpreter. PowerShell remains evaluation-only and is not imported by production code.
+
+The authorized four-case preflight stopped at Case A under the hard-fail rule. The gate and interpreter both returned HTTP `200`; the gate contract, ContextAnalysis contract, and Friday semantic checks passed. One of three model signal phrases was not an exact cue in the input, so the case was classified as fabricated specific evidence. Cases B-D were not run. Formal evidence grounding remains `not_enforced_by_current_contract`; no evidence metric was fabricated. Gold Set and full evaluation were not run.

@@ -5,7 +5,7 @@ import type { ContextAnalysis } from '../../shared/contracts/context';
 import type { ContextEngine } from '../engine/context-engine';
 import { AIContextEngine, MockContextEngine } from '../engine/context-engine';
 import { ContextProviderError, ModelContextProvider } from '../providers/context-provider';
-import { MockContextGateEngine } from '../engine/context-gate';
+import { AIContextGateEngine, ContextGateError, MockContextGateEngine } from '../engine/context-gate';
 
 export type WorkerEnv = {
   CONTEXT_ENGINE_MODE?: string;
@@ -19,7 +19,10 @@ export async function handleDecode(request: Request, env: WorkerEnv = {}): Promi
   try { body = await request.json(); } catch { return json({ type: 'failed', errorCode: 'invalid_request', message: 'Request body must be valid JSON.' }, 400); }
   try {
     const request = parseDecodeRequest(body);
-    const gateResult = new MockContextGateEngine().checkContext(request.inputText, request.additionalContext);
+    const gateEngine = env.CONTEXT_ENGINE_MODE === 'ai'
+      ? new AIContextGateEngine({ apiKey: env.MODEL_API_KEY, endpoint: env.MODEL_API_URL, model: env.MODEL_NAME })
+      : new MockContextGateEngine();
+    const gateResult = await gateEngine.checkContext(request.inputText, request.additionalContext);
     if (gateResult.status === 'needs_context') {
       return json({ type: 'needs_context', originalMoment: request.inputText, reason: 'ambiguous_phrase', question: gateResult.question ?? 'What was said immediately before this?', missingContext: gateResult.missingInformation ?? 'The meaning is ambiguous without the surrounding exchange.' }, 200);
     }
@@ -35,8 +38,17 @@ export async function handleDecode(request: Request, env: WorkerEnv = {}): Promi
     return json(assertDecodeResponse(contextAnalysis ? { ...decoded, contextAnalysis } : decoded), 200);
   } catch (error) {
     if (error instanceof ContextProviderError) return json({ type: 'failed', errorCode: error.code, message: error.message }, 502);
+    if (error instanceof ContextGateError) return json({ type: 'failed', errorCode: contextGateErrorCode(error), message: error.stage === 'missing_api_key' ? 'Context model API key is not configured.' : 'Context gate is unavailable.' }, 502);
     return json({ type: 'failed', errorCode: 'invalid_request', message: error instanceof Error ? error.message : 'Invalid decode request.' }, 400);
   }
+}
+
+function contextGateErrorCode(error: ContextGateError): 'context_timeout' | 'context_invalid_json' | 'context_schema_invalid' | 'missing_api_key' | 'model_unavailable' {
+  if (error.stage === 'missing_api_key') return 'missing_api_key';
+  if (error.stage === 'timeout') return 'context_timeout';
+  if (error.stage === 'invalid_json') return 'context_invalid_json';
+  if (error.stage === 'invalid_contract') return 'context_schema_invalid';
+  return 'model_unavailable';
 }
 
 function json(value: DecodeResponse, status: number): Response { return Response.json(value, { status }); }
