@@ -12,7 +12,7 @@ const responseShape = `{
   "register": "community",
   "communityContext": "",
   "socialImplication": "",
-  "signals": [{ "phrase": "", "signalType": "wording", "explanation": "" }],
+  "signals": [{ "phrase": "", "signalType": "wording", "explanation": "", "evidenceQuote": "" }],
   "usageBoundary": { "naturalIn": "", "beCarefulIn": "", "avoidIn": "" },
   "confidence": "medium",
   "uncertainty": ""
@@ -34,6 +34,12 @@ export function buildContextAnalysisPrompt(input: string, additionalContext?: st
 
 Your task is to understand hidden internet context. Do not only translate words.
 Analyze literal meaning, contextual meaning, tone, register/community, social implication, signals that reveal the meaning, usage boundary, and uncertainty.
+
+Evidence grounding rules:
+- Every signal must include exactly one evidenceQuote copied verbatim from the supplied conversation or additional context.
+- Never invent, paraphrase, reconstruct, or normalize evidenceQuote.
+- If you cannot point to an exact textual cue, do not create that signal.
+- Keep interpretation in explanation; evidenceQuote must remain the source text.
 
 Do not invent missing context. Mark uncertainty when evidence is insufficient. Distinguish sarcasm from sincerity. Explain why people say it and who would naturally use it.
 

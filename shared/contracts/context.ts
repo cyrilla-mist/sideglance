@@ -13,6 +13,7 @@ export type ContextSignal = {
   phrase: string;
   signalType: ContextSignalType;
   explanation: string;
+  evidenceQuote: string;
 };
 
 export type ContextAnalysis = {

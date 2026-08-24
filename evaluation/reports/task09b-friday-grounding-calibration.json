@@ -1,0 +1,41 @@
+{
+  "runId": "task09b-friday-grounding-calibration",
+  "calibrationRound": 2,
+  "transport": "evaluation-only PowerShell bridge",
+  "productionWorkerPathUsed": false,
+  "model": "gemini-3.5-flash",
+  "reasoningEffort": "low",
+  "attempts": [
+    {
+      "attempt": 1,
+      "gate": {
+        "status": "ready",
+        "contract": "pass"
+      },
+      "interpreterInvoked": true,
+      "requests": [
+        {
+          "stage": "gate",
+          "status": 200,
+          "latencyMs": 12568
+        },
+        {
+          "stage": "interpreter",
+          "status": 200,
+          "latencyMs": 22660
+        }
+      ],
+      "latencyMs": 35231,
+      "failure": {
+        "category": "provider_error",
+        "stage": "evidence_grounding_error",
+        "status": 200,
+        "evidenceTotal": 3,
+        "evidenceExactMatches": 2,
+        "evidenceInvalid": 1
+      },
+      "verdict": "MODEL_GROUNDING_NONCOMPLIANCE"
+    }
+  ],
+  "finalVerdict": "MODEL_GROUNDING_NONCOMPLIANCE"
+}

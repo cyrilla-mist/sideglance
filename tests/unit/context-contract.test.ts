@@ -7,7 +7,7 @@ const validAnalysis: ContextAnalysis = {
   literalMeaning: 'Literal meaning', contextualMeaning: 'Contextual meaning', tone: ['playful', 'sarcastic'], register: 'technical',
   communityContext: 'Developer community', socialImplication: 'Shared norms are assumed',
   usageBoundary: { naturalIn: 'Teammates', beCarefulIn: 'New coworkers', avoidIn: 'Formal review' }, confidence: 'high',
-  uncertainty: 'Intent is not fully observable.', signals: [{ phrase: '💀', signalType: 'emoji', explanation: 'Signals irony.' }],
+  uncertainty: 'Intent is not fully observable.', signals: [{ phrase: '💀', signalType: 'emoji', explanation: 'Signals irony.', evidenceQuote: '💀' }],
 };
 
 describe('context contract', () => {
@@ -33,5 +33,11 @@ describe('context contract', () => {
     expect(enumResult.issues[0]).toMatchObject({ path: 'register', reason: 'invalid_enum', receivedValue: 'invented' });
     const nestedResult = diagnoseContextAnalysis({ ...validAnalysis, signals: [{ phrase: 'x', signalType: 'irony' }] });
     expect(nestedResult.issues).toContainEqual({ path: 'signals[0].explanation', reason: 'missing_field', expected: 'string' });
+    expect(nestedResult.issues).toContainEqual({ path: 'signals[0].evidenceQuote', reason: 'missing_field', expected: 'string' });
+  });
+
+  it('rejects a non-string evidence quote', () => {
+    const result = diagnoseContextAnalysis({ ...validAnalysis, signals: [{ ...validAnalysis.signals[0], evidenceQuote: 42 }] });
+    expect(result.issues).toContainEqual({ path: 'signals[0].evidenceQuote', reason: 'wrong_type', expected: 'string', receivedType: 'number' });
   });
 });

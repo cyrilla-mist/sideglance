@@ -124,3 +124,11 @@ The calibration checkpoint was frozen before gate work in commit `94448e3` (`ref
 `AIContextGateEngine` now uses the existing gate result vocabulary, an injected `FetchLike` seam, a bounded 30-second AbortController, and JSON contract validation. The gate is evaluated before `AIContextEngine`; a `needs_context` result does not invoke the interpreter. PowerShell remains evaluation-only and is not imported by production code.
 
 The authorized four-case preflight stopped at Case A under the hard-fail rule. The gate and interpreter both returned HTTP `200`; the gate contract, ContextAnalysis contract, and Friday semantic checks passed. One of three model signal phrases was not an exact cue in the input, so the case was classified as fabricated specific evidence. Cases B-D were not run. Formal evidence grounding remains `not_enforced_by_current_contract`; no evidence metric was fabricated. Gold Set and full evaluation were not run.
+
+## 09B.16 Evidence grounding hardening and Calibration Round 2
+
+The 09B.15 AI Context Gate checkpoint was frozen in commit `1f12005` (`feat: add AI context gate`). `ContextSignal` now requires `evidenceQuote`. The deterministic validator uses only case-sensitive exact substring matching against the original input plus explicit additional context; it performs no trimming, case repair, fuzzy matching, semantic similarity, or automatic rewriting. Validation occurs after provider envelope parsing, JSON parsing, and ContextAnalysis schema validation.
+
+An invalid evidence quote is an internal `hallucinated_evidence` provider failure and cannot enter the decoded response. The public route returns a safe generic failure instead of exposing provider internals. The existing editorial evidence flow now renders the verified `evidenceQuote` directly.
+
+Calibration Round 2 used `gemini-3.5-flash`, `reasoning_effort: low`, and the evaluation-only PowerShell bridge. Gate and interpreter each returned HTTP `200`; ContextAnalysis contract validation passed; semantic checks passed; grounding was `2/3` exact with one invalid quote. Final classification: `MODEL_GROUNDING_NONCOMPLIANCE`. No Cases B-D, Gold Set, or Prompt Calibration Round 3 were run.

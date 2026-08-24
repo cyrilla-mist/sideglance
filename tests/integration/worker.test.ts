@@ -46,7 +46,7 @@ describe('worker health route', () => {
   });
 
   it('evaluates the fixture context output independently from the API route', () => {
-    const result = new ContextEvaluator().evaluate({ id: 'friday-fixture', category: 'developer_culture', input: 'fearless behavior 💀', expected: {
+    const result = new ContextEvaluator().evaluate({ id: 'friday-fixture', category: 'developer_culture', input: 'Nora: just merged the auth rewrite into main\n\nKai: on a friday??\n\nLeo: fearless behavior 💀\n\nKai: enjoy your weekend', expected: {
       tone: ['sarcastic', 'playful'], communityContext: 'developer norm', requiredSignals: [{ phrase: 'fearless behavior', signalTypes: ['irony'] }], uncertaintyRequired: true,
     } }, fridayMergeContextAnalysis);
     expect(result.passed).toBe(true);

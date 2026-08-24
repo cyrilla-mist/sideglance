@@ -1,4 +1,5 @@
 import type { ContextAnalysis, Tone } from '../../shared/contracts/context';
+import { validateContextEvidence } from '../../shared/schemas/context-evidence';
 import type { EvaluationCase, EvaluationIssue, EvaluationReport, EvaluationResult, ExpectedTone } from '../schemas/evaluation';
 
 const toneAliases: Record<ExpectedTone, Tone[]> = {
@@ -11,6 +12,8 @@ export class ContextEvaluator {
   evaluate(caseItem: EvaluationCase, analysis: ContextAnalysis): EvaluationResult {
     const issues: EvaluationIssue[] = [];
     const expected = caseItem.expected;
+    const grounding = validateContextEvidence(analysis, [caseItem.input, caseItem.context ?? ''].filter(Boolean).join('\n'));
+    if (!grounding.valid) issues.push({ rule: 'hallucinated_evidence', message: 'One or more signal evidence quotes were not copied exactly from the case source.' });
     if (expected.tone && !expected.tone.some((tone) => toneAliases[tone].some((alias) => analysis.tone.includes(alias)))) {
       issues.push({ rule: 'tone_match', message: `Expected tone ${expected.tone.join(' or ')} but received ${analysis.tone.join(', ')}.` });
     }

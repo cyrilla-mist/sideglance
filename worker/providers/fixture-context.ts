@@ -11,9 +11,9 @@ export const fridayMergeContextAnalysis: ContextAnalysis = {
   confidence: 'high',
   uncertainty: 'The text does not prove whether anyone is genuinely annoyed or only extending the joke.',
   signals: [
-    { phrase: 'on a friday??', signalType: 'timing', explanation: 'The timing implies concern about making a risky change before the weekend.' },
-    { phrase: 'fearless behavior 💀', signalType: 'irony', explanation: 'The skull emoji undercuts the apparent praise and signals playful sarcasm.' },
-    { phrase: 'enjoy your weekend', signalType: 'community_norm', explanation: 'The closing line continues a developer in-joke about weekend support risk.' },
+    { phrase: 'on a friday??', signalType: 'timing', explanation: 'The timing implies concern about making a risky change before the weekend.', evidenceQuote: 'on a friday??' },
+    { phrase: 'fearless behavior 💀', signalType: 'irony', explanation: 'The skull emoji undercuts the apparent praise and signals playful sarcasm.', evidenceQuote: 'fearless behavior 💀' },
+    { phrase: 'enjoy your weekend', signalType: 'community_norm', explanation: 'The closing line continues a developer in-joke about weekend support risk.', evidenceQuote: 'enjoy your weekend' },
   ],
 };
 
@@ -28,8 +28,8 @@ export const sincereFearlessContextAnalysis: ContextAnalysis = {
   confidence: 'high',
   uncertainty: 'The exact emotional weight of the issue is not stated.',
   signals: [
-    { phrase: 'spoke up about the issue', signalType: 'wording', explanation: 'The specific action gives the compliment a sincere subject.' },
-    { phrase: 'fearless behavior', signalType: 'relationship', explanation: 'The phrase directly affirms a difficult action rather than using irony.' },
+    { phrase: 'spoke up about the issue', signalType: 'wording', explanation: 'The specific action gives the compliment a sincere subject.', evidenceQuote: 'spoke up about the issue' },
+    { phrase: 'fearless behavior', signalType: 'relationship', explanation: 'The phrase directly affirms a difficult action rather than using irony.', evidenceQuote: 'fearless behavior' },
   ],
 };
 
@@ -44,7 +44,7 @@ export const touchGrassContextAnalysis: ContextAnalysis = {
   confidence: 'high',
   uncertainty: 'The phrase may be playful or genuinely dismissive depending on the relationship and exchange.',
   signals: [
-    { phrase: 'touch grass', signalType: 'community_norm', explanation: 'The phrase is a recognizable internet shorthand rather than a literal instruction.' },
-    { phrase: 'grass', signalType: 'wording', explanation: 'The ordinary image creates a contrast with excessive online focus.' },
+    { phrase: 'touch grass', signalType: 'community_norm', explanation: 'The phrase is a recognizable internet shorthand rather than a literal instruction.', evidenceQuote: 'touch grass' },
+    { phrase: 'grass', signalType: 'wording', explanation: 'The ordinary image creates a contrast with excessive online focus.', evidenceQuote: 'grass' },
   ],
 };

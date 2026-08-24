@@ -57,6 +57,7 @@ export function diagnoseContextAnalysis(value: unknown): ContextAnalysisDiagnost
     requireField(item, 'phrase', 'string', issues, `${path}.phrase`);
     requireEnum(item, 'signalType', CONTEXT_SIGNAL_TYPE_VALUES, issues, `${path}.signalType`);
     requireField(item, 'explanation', 'string', issues, `${path}.explanation`);
+    requireField(item, 'evidenceQuote', 'string', issues, `${path}.evidenceQuote`);
   });
   return { valid: issues.length === 0, issues };
 }

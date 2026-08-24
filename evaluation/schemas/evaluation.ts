@@ -29,7 +29,7 @@ export type EvaluationCase = {
 };
 
 export type EvaluationIssue = {
-  rule: 'tone_match' | 'register_match' | 'community_context' | 'required_signal' | 'forbidden_claim' | 'usage_boundary' | 'uncertainty';
+  rule: 'tone_match' | 'register_match' | 'community_context' | 'required_signal' | 'forbidden_claim' | 'usage_boundary' | 'uncertainty' | 'hallucinated_evidence';
   message: string;
 };
 

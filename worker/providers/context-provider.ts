@@ -1,9 +1,10 @@
 import type { ContextAnalysis } from '../../shared/contracts/context';
 import { assertContextAnalysis } from '../../shared/schemas/context';
+import { validateContextEvidence } from '../../shared/schemas/context-evidence';
 import { buildContextAnalysisPrompt } from '../prompts/context-analysis';
 
-export type ContextProviderErrorCode = 'context_timeout' | 'context_invalid_json' | 'context_schema_invalid' | 'missing_api_key' | 'model_unavailable';
-export type ContextProviderFailureStage = 'env_loading' | 'request_construction' | 'fetch_error' | 'timeout' | 'http_error' | 'api_envelope_error' | 'missing_content' | 'model_json_error' | 'context_schema_error';
+export type ContextProviderErrorCode = 'context_timeout' | 'context_invalid_json' | 'context_schema_invalid' | 'hallucinated_evidence' | 'missing_api_key' | 'model_unavailable';
+export type ContextProviderFailureStage = 'env_loading' | 'request_construction' | 'fetch_error' | 'timeout' | 'http_error' | 'api_envelope_error' | 'missing_content' | 'model_json_error' | 'context_schema_error' | 'evidence_grounding_error';
 
 export type ContextProviderDiagnostics = {
   stage: ContextProviderFailureStage | 'response_received';
@@ -19,6 +20,9 @@ export type ContextProviderDiagnostics = {
   causeName?: string;
   causeCode?: string;
   causeMessage?: string;
+  evidenceTotal?: number;
+  evidenceExactMatches?: number;
+  evidenceInvalid?: number;
   aborted?: boolean;
   signalAborted?: boolean;
 };
@@ -81,7 +85,11 @@ export class ModelContextProvider implements ContextModelProvider {
       const result = await this.requestContent(prompt.system, prompt.user, this.config.responseFormat !== false, controller.signal);
       let parsed: unknown;
       try { parsed = JSON.parse(result.content) as unknown; } catch { throw new ContextProviderError('context_invalid_json', 'Context model returned invalid JSON.', { ...result, stage: 'model_json_error' }); }
-      try { return assertContextAnalysis(parsed); } catch { throw new ContextProviderError('context_schema_invalid', 'Context model returned an invalid context schema.', { ...result, stage: 'context_schema_error' }); }
+      let analysis: ContextAnalysis;
+      try { analysis = assertContextAnalysis(parsed); } catch { throw new ContextProviderError('context_schema_invalid', 'Context model returned an invalid context schema.', { ...result, stage: 'context_schema_error' }); }
+      const grounding = validateContextEvidence(analysis, [input, additionalContext ?? ''].filter(Boolean).join('\n'));
+      if (!grounding.valid) throw new ContextProviderError('hallucinated_evidence', 'Context model returned unsupported evidence.', { ...result, stage: 'evidence_grounding_error', evidenceTotal: grounding.total, evidenceExactMatches: grounding.exactMatches, evidenceInvalid: grounding.invalid.length });
+      return analysis;
     } catch (error) {
       if (error instanceof ContextProviderError) throw error;
       throw new ContextProviderError('model_unavailable', 'Context model is unavailable.', { stage: 'request_construction', status: null, contentType: null, elapsedMs: 0, assistantContentReached: false, envelopeParsed: false });

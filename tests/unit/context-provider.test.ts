@@ -4,7 +4,7 @@ import { ModelContextProvider, ContextProviderError } from '../../worker/provide
 const analysis = {
   literalMeaning: 'A literal meaning', contextualMeaning: 'A contextual meaning', tone: ['playful'], register: 'community',
   communityContext: 'Internet slang', socialImplication: 'Shared online norms',
-  signals: [{ phrase: 'touch grass', signalType: 'wording', explanation: 'A familiar admonition.' }],
+  signals: [{ phrase: 'touch grass', signalType: 'wording', explanation: 'A familiar admonition.', evidenceQuote: 'touch grass' }],
   usageBoundary: { naturalIn: 'Online communities', beCarefulIn: 'Professional settings', avoidIn: 'Formal reports' },
   confidence: 'medium', uncertainty: 'Exact intent depends on context.',
 };
@@ -23,6 +23,12 @@ describe('ModelContextProvider', () => {
   it('rejects JSON that does not satisfy ContextAnalysis', async () => {
     const provider = new ModelContextProvider({ apiKey: 'test-key', fetcher: async () => new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ ...analysis, confidence: 'certain' }) } }] })) });
     await expect(provider.analyzeContext('touch grass')).rejects.toMatchObject({ code: 'context_schema_invalid' });
+  });
+
+  it('rejects schema-valid output whose evidence is not in the supplied source', async () => {
+    const invalidEvidence = { ...analysis, signals: [{ ...analysis.signals[0], evidenceQuote: 'invented wording' }] };
+    const provider = new ModelContextProvider({ apiKey: 'test-key', fetcher: async () => new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(invalidEvidence) } }] })) });
+    await expect(provider.analyzeContext('touch grass')).rejects.toMatchObject({ code: 'hallucinated_evidence', diagnostics: { stage: 'evidence_grounding_error', evidenceTotal: 1, evidenceExactMatches: 0, evidenceInvalid: 1 } });
   });
 
   it('reports a missing API key safely', async () => {
