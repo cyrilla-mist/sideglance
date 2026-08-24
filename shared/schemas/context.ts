@@ -1,9 +1,9 @@
 import type { ContextAnalysis, ContextSignalType, Confidence, Register, Tone } from '../contracts/context';
 
-const tones: Tone[] = ['playful', 'sarcastic', 'sincere', 'neutral', 'critical', 'uncertain'];
-const registers: Register[] = ['casual', 'professional', 'community', 'meme', 'technical'];
-const confidences: Confidence[] = ['high', 'medium', 'low'];
-const signalTypes: ContextSignalType[] = ['emoji', 'wording', 'community_norm', 'timing', 'relationship', 'irony'];
+export const CONTEXT_TONE_VALUES = ['playful', 'sarcastic', 'sincere', 'neutral', 'critical', 'uncertain'] as const satisfies readonly Tone[];
+export const CONTEXT_REGISTER_VALUES = ['casual', 'professional', 'community', 'meme', 'technical'] as const satisfies readonly Register[];
+export const CONTEXT_CONFIDENCE_VALUES = ['high', 'medium', 'low'] as const satisfies readonly Confidence[];
+export const CONTEXT_SIGNAL_TYPE_VALUES = ['emoji', 'wording', 'community_norm', 'timing', 'relationship', 'irony'] as const satisfies readonly ContextSignalType[];
 
 export type ContextAnalysisIssueReason = 'missing_field' | 'wrong_type' | 'invalid_enum' | 'invalid_array' | 'invalid_nested_shape' | 'invalid_optional_value';
 
@@ -34,13 +34,13 @@ export function diagnoseContextAnalysis(value: unknown): ContextAnalysisDiagnost
   for (const key of ['literalMeaning', 'contextualMeaning', 'communityContext', 'socialImplication', 'uncertainty']) {
     requireField(analysis, key, 'string', issues);
   }
-  requireEnum(analysis, 'register', registers, issues);
-  requireEnum(analysis, 'confidence', confidences, issues);
+  requireEnum(analysis, 'register', CONTEXT_REGISTER_VALUES, issues);
+  requireEnum(analysis, 'confidence', CONTEXT_CONFIDENCE_VALUES, issues);
   const tone = analysis.tone;
   if (!(('tone' in analysis))) issues.push({ path: 'tone', reason: 'missing_field', expected: 'non-empty array' });
   else if (!Array.isArray(tone)) issues.push({ path: 'tone', reason: 'invalid_array', expected: 'non-empty array', receivedType: describeType(tone) });
   else if (tone.length === 0) issues.push({ path: 'tone', reason: 'invalid_array', expected: 'non-empty array', receivedType: 'array' });
-  else tone.forEach((item, index) => requireEnumValue(`tone[${index}]`, item, tones, issues));
+  else tone.forEach((item, index) => requireEnumValue(`tone[${index}]`, item, CONTEXT_TONE_VALUES, issues));
 
   const boundary = analysis.usageBoundary;
   if (!('usageBoundary' in analysis)) issues.push({ path: 'usageBoundary', reason: 'missing_field', expected: 'object' });
@@ -55,7 +55,7 @@ export function diagnoseContextAnalysis(value: unknown): ContextAnalysisDiagnost
     if (!signal || typeof signal !== 'object' || Array.isArray(signal)) { issues.push({ path, reason: 'invalid_nested_shape', expected: 'object', receivedType: describeType(signal) }); return; }
     const item = signal as Record<string, unknown>;
     requireField(item, 'phrase', 'string', issues, `${path}.phrase`);
-    requireEnum(item, 'signalType', signalTypes, issues, `${path}.signalType`);
+    requireEnum(item, 'signalType', CONTEXT_SIGNAL_TYPE_VALUES, issues, `${path}.signalType`);
     requireField(item, 'explanation', 'string', issues, `${path}.explanation`);
   });
   return { valid: issues.length === 0, issues };

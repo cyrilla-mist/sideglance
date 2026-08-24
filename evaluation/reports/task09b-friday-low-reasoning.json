@@ -1,0 +1,22 @@
+{
+  "runId": "task09b-friday-low-reasoning",
+  "transport": "evaluation-only PowerShell bridge",
+  "productionWorkerPathUsed": false,
+  "apiKeyConfigured": true,
+  "reasoning_effort": "low",
+  "requestShape": { "model": true, "messages": true, "responseFormat": true, "reasoningEffort": true },
+  "attempts": [
+    { "attempt": 1, "httpStatus": null, "latencyMs": 30023, "stage": "timeout", "category": "evaluation_transport_timeout" },
+    { "attempt": 2, "httpStatus": null, "latencyMs": 30031, "stage": "timeout", "category": "evaluation_transport_timeout" }
+  ],
+  "parse": { "envelope": "not_reached", "assistantContent": "not_reached", "json": "not_reached" },
+  "guard": { "validator": "isContextAnalysis via diagnoseContextAnalysis", "valid": false, "issueCount": 0, "issues": [] },
+  "outputShape": { "actualType": "undefined" },
+  "enumMismatches": [],
+  "promptSchemaDrift": { "classification": "none_observed" },
+  "evidence": { "total": 0, "exactMatches": 0, "invalid": 0 },
+  "semanticSnapshot": { "developerFridayRiskContext": "unknown", "sarcasmIronicPraise": "unknown", "weekendImplication": "unknown", "tone": "missing", "register": "missing", "communityContext": "missing", "confidence": "missing", "uncertaintyPresent": false },
+  "rootCause": "evaluation_transport_timeout",
+  "secondaryCategories": ["provider_availability_blocked"],
+  "decision": "PROVIDER_AVAILABILITY_BLOCKED"
+}

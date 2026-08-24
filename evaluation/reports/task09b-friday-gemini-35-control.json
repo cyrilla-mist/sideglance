@@ -1,0 +1,107 @@
+{
+  "runId": "task09b-friday-low-reasoning",
+  "transport": "evaluation-only PowerShell bridge",
+  "productionWorkerPathUsed": false,
+  "apiKeyConfigured": true,
+  "evaluation_model_override": "gemini-3.5-flash",
+  "model": "gemini-3.5-flash",
+  "reasoning_effort": "low",
+  "requestShape": {
+    "model": true,
+    "messages": true,
+    "responseFormat": true,
+    "reasoningEffort": true
+  },
+  "attempts": [
+    {
+      "attempt": 1,
+      "httpStatus": null,
+      "latencyMs": 30032,
+      "stage": "timeout",
+      "category": "evaluation_transport_timeout"
+    },
+    {
+      "attempt": 2,
+      "httpStatus": 200,
+      "latencyMs": 7974,
+      "stage": "contract_pass",
+      "category": "contract_pass"
+    }
+  ],
+  "parse": {
+    "envelope": "pass",
+    "assistantContent": "reached",
+    "json": "pass"
+  },
+  "guard": {
+    "validator": "isContextAnalysis via diagnoseContextAnalysis",
+    "valid": true,
+    "issueCount": 0,
+    "issues": []
+  },
+  "outputShape": {
+    "topLevelKeysPresent": [
+      "communityContext",
+      "confidence",
+      "contextualMeaning",
+      "literalMeaning",
+      "register",
+      "signals",
+      "socialImplication",
+      "tone",
+      "uncertainty",
+      "usageBoundary"
+    ],
+    "requiredKeysMissing": [],
+    "extraTopLevelKeys": [],
+    "nested": {
+      "tone": {
+        "actualType": "array",
+        "itemCount": 2,
+        "itemTypes": [
+          "string"
+        ]
+      },
+      "usageBoundary": {
+        "actualType": "object",
+        "nestedKeys": [
+          "avoidIn",
+          "beCarefulIn",
+          "naturalIn"
+        ]
+      },
+        "signals": {
+          "actualType": "array",
+          "itemCount": 2,
+          "itemTypes": ["object"],
+          "firstItemKeys": ["phrase", "signalType", "explanation"]
+      }
+    }
+  },
+  "enumMismatches": [],
+  "promptSchemaDrift": {
+    "classification": "none_observed",
+    "findings": ["Prompt and contract use the same required field names, object/array shapes, and complete enum vocabulary generated from shared values."]
+  },
+  "evidence": {
+    "total": 0,
+    "exactMatches": 0,
+    "invalid": 0
+  },
+  "semanticSnapshot": {
+    "developerFridayRiskContext": "yes",
+    "sarcasmIronicPraise": "yes",
+    "weekendImplication": "yes",
+    "tone": [
+      "sarcastic",
+      "playful"
+    ],
+    "register": "meme",
+    "communityContext": "Software engineering and tech startup culture, where Friday deployments are notoriously feared because they often lead t",
+    "confidence": "high",
+    "uncertaintyPresent": false
+  },
+  "rootCause": "contract_pass",
+  "secondaryCategories": [],
+  "decision": "CALIBRATION_PASS"
+}

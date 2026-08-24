@@ -95,6 +95,24 @@ The existing boolean `isContextAnalysis` guard now delegates to a pure `diagnose
 
 The single authorized Friday contract capture did not reach Gemini content: its only bounded attempt ended in a 30,029 ms transport timeout with no HTTP response. Consequently no new guard issue, structure, evidence, or semantic snapshot could be extracted. The earlier HTTP 200/schema-failure observation remains a generic contract-guard failure without exact mismatch evidence. No prompt, contract, normalization, or model change was made.
 
+## Gemini 3.5 Flash Availability Control
+
+This evaluation-only experiment changed only the model override from `gemini-3.7-flash` to `gemini-3.5-flash`; `reasoning_effort: "low"`, prompt, response format, contract, and retry policy were unchanged. The Friday request received HTTP `200` in 16,301 ms, and envelope parsing, assistant extraction, and JSON parsing passed. The ContextAnalysis guard captured four enum mismatches (`register`, two `tone` values, and one signal type), so the result is `CONTRACT_DIAGNOSTIC_CAPTURED`. The limited snapshot detected Friday developer-risk context, ironic/playful framing, and weekend implication, but this is not formal evaluator scoring. Production `MODEL_NAME` and provider defaults remain unchanged.
+
+## Prompt Calibration Round 1
+
+Baseline assessment: `prompt_contract_under_specified` was true. The previous prompt showed enum examples but did not enumerate the complete contract vocabulary or explicitly prohibit invented/composite taxonomy labels. The prompt now states the complete shared enum sets, requires exact taxonomy values, forbids synonyms and composite labels, and directs richer nuance into descriptive fields. The TypeScript contract, guard, provider, response format, model, and evaluation transport were unchanged.
+
+The calibrated Friday run used `gemini-3.5-flash` with `reasoning_effort: "low"`. Attempt 1 timed out; Attempt 2 returned HTTP `200` in 7,974 ms. Envelope parsing, JSON parsing, and ContextAnalysis contract validation passed. The semantic regression snapshot remained positive for developer Friday context, ironic/playful framing, and weekend implication. Evidence statistics were `0 / 0 / 0`; no formal evaluator score was run. Classification: `CALIBRATION_PASS`.
+
+## 09B.12 Low Reasoning Control
+
+This was an evaluation-only single-variable experiment. The request shape confirmed `model`, `messages`, and `response_format` remained present, with only `reasoning_effort: "low"` added; no production provider default was changed. Both bounded Friday attempts timed out before an HTTP response (30,023 ms and 30,031 ms), so envelope parsing, assistant extraction, JSON parsing, contract diagnosis, evidence checks, and semantic snapshot were not reached. The result is `PROVIDER_AVAILABILITY_BLOCKED`, not a low-reasoning candidate and not a production configuration decision.
+
 ## Current 09B checkpoint
 
 Production Worker transport remains unvalidated. Local Node/workerd has Google API network-path issues. The PowerShell bridge is explicitly evaluation-only and is not imported by `worker/` or `src/`. Gemini has returned HTTP `200` at least once through that bridge; the OpenAI-compatible envelope and JSON parsing passed on that run, but the hand-written ContextAnalysis contract guard rejected the output and the exact mismatch was not captured. Explainable guard diagnostics now exist, and deterministic tests are healthy: the targeted contract tests pass `4/4`, while the full unit suite passes `32/32`. Semantic model validation remains pending; no Friday Merge pass, Gold Set evaluation, or production transport validation has been established.
+
+## 09B.11 Friday real contract capture
+
+The clean checkpoint was retried once with the existing bounded policy. Attempt 1 returned HTTP `503` in 9,611 ms and was classified as `provider_temporarily_unavailable`. Attempt 2 used a fresh child/provider/controller but timed out after 30,020 ms without an HTTP response. Because no attempt returned HTTP `200`, envelope parsing, assistant extraction, JSON parsing, and contract diagnosis were not reached. The primary result is `evaluation_transport_timeout`, with `provider_temporarily_unavailable` as a secondary category. No contract mismatch can be inferred from this run, and no code, prompt, model, or contract change was made.

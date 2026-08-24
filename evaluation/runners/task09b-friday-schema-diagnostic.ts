@@ -101,13 +101,24 @@ function evidenceStats(value: unknown): { total: number; exactMatches: number; i
 
 async function main(): Promise<void> {
   const environment = await loadEvaluationModelEnvironment();
+  const lowReasoning = process.env.SIDEGLANCE_EVAL_REASONING_EFFORT === 'low';
+  const evaluationModel = process.env.SIDEGLANCE_EVAL_MODEL ?? environment.MODEL_NAME;
+  const startAttempt = process.env.SIDEGLANCE_EVAL_ATTEMPT === '2' ? 2 : 1;
   const attempts: Array<Record<string, unknown>> = [];
+  let requestShape = { model: false, messages: false, responseFormat: false, reasoningEffort: false };
   let captured: unknown;
   let finalError: ContextProviderError | undefined;
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
+  for (let attempt = startAttempt; attempt <= 2; attempt += 1) {
     const baseFetcher = createPowerShellGeminiFetcher(environment);
     const fetcher = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-      const response = await baseFetcher(input, init);
+      let requestInit = init;
+      if (lowReasoning && typeof init?.body === 'string') {
+        const body = JSON.parse(init.body) as Record<string, unknown>;
+        body.reasoning_effort = 'low';
+        requestShape = { model: typeof body.model === 'string', messages: Array.isArray(body.messages), responseFormat: Boolean(body.response_format), reasoningEffort: body.reasoning_effort === 'low' };
+        requestInit = { ...init, body: JSON.stringify(body) };
+      }
+      const response = await baseFetcher(input, requestInit);
       if (response.ok) {
         const payload = await response.clone().json().catch(() => undefined);
         if (payload && typeof payload === 'object') {
@@ -120,36 +131,44 @@ async function main(): Promise<void> {
     };
     const started = Date.now();
     try {
-      const provider = new ModelContextProvider({ apiKey: environment.MODEL_API_KEY, endpoint: environment.MODEL_API_URL, model: environment.MODEL_NAME, fetcher });
+      const provider = new ModelContextProvider({ apiKey: environment.MODEL_API_KEY, endpoint: environment.MODEL_API_URL, model: evaluationModel, fetcher });
       await provider.analyzeContext(fridayInput);
-      attempts.push({ attempt, httpStatus: baseFetcher.lastResponse?.status ?? null, latencyMs: Date.now() - started, stage: 'unexpected_schema_pass' });
+      attempts.push({ attempt, httpStatus: baseFetcher.lastResponse?.status ?? null, latencyMs: Date.now() - started, stage: 'contract_pass', category: 'contract_pass' });
       break;
     } catch (error) {
       finalError = error instanceof ContextProviderError ? error : undefined;
       const status = baseFetcher.lastResponse?.status ?? finalError?.diagnostics?.status ?? null;
-      attempts.push({ attempt, httpStatus: status, latencyMs: Date.now() - started, stage: finalError?.diagnostics?.stage ?? 'transport_error' });
-      if (attempt === 2 || ![429, 500, 502, 503, 504].includes(status ?? -1)) break;
+      const stage = finalError?.diagnostics?.stage ?? 'transport_error';
+      const category = stage === 'context_schema_error' ? 'contract_diagnostic_captured' : status !== null && [429, 500, 502, 503, 504].includes(status) ? 'provider_temporarily_unavailable' : stage === 'timeout' ? 'evaluation_transport_timeout' : 'provider_http_error';
+      attempts.push({ attempt, httpStatus: status, latencyMs: Date.now() - started, stage, category });
+      const retryable = stage === 'timeout' || [429, 500, 502, 503, 504].includes(status ?? -1);
+      if (attempt === 2 || !retryable) break;
       await new Promise((resolveWait) => setTimeout(resolveWait, 20_000));
     }
   }
   const issues = captured === undefined ? [] : diagnoseContextAnalysis(captured).issues;
   const report = {
-    runId: 'task09b-friday-contract-capture',
+    runId: lowReasoning ? 'task09b-friday-low-reasoning' : 'task09b-friday-contract-capture',
     transport: 'evaluation-only PowerShell bridge',
     productionWorkerPathUsed: false,
     apiKeyConfigured: Boolean(environment.MODEL_API_KEY),
+    evaluation_model_override: process.env.SIDEGLANCE_EVAL_MODEL ?? 'none',
+    model: evaluationModel ?? 'configured-by-environment',
+    reasoning_effort: lowReasoning ? 'low' : 'not_set',
+    requestShape,
     attempts,
     parse: { envelope: captured === undefined ? 'not_reached' : 'pass', assistantContent: captured === undefined ? 'not_reached' : 'reached', json: captured === undefined ? 'not_reached' : 'pass' },
     guard: { validator: 'isContextAnalysis via diagnoseContextAnalysis', valid: captured === undefined ? false : issues.length === 0, issueCount: issues.length, issues },
     outputShape: shapeSummary(captured),
     enumMismatches: issues.filter((item) => (item.expected ?? '').startsWith('enum(')),
-    promptSchemaDrift: { classification: 'none_observed', findings: ['Prompt and contract use the same required field names and object/array shapes; prompt examples use valid enum values. Full enum vocabulary is not enumerated in the prompt.'] },
+    promptSchemaDrift: { classification: 'none_observed', findings: ['Prompt and contract use the same required field names, object/array shapes, and complete enum vocabulary generated from shared values.'] },
     evidence: evidenceStats(captured),
     semanticSnapshot: semanticSnapshot(captured),
-    rootCause: captured === undefined ? 'other' : issues.some((item) => item.path.startsWith('signals')) ? 'nested_shape_mismatch' : issues.some((item) => item.reason === 'invalid_enum') ? 'enum_vocabulary_mismatch' : issues.some((item) => item.reason === 'wrong_type') ? 'wrong_primitive_type' : issues.some((item) => item.reason === 'missing_field') ? 'missing_required_fields' : 'mixed_contract_failure',
+    rootCause: captured === undefined ? (attempts.at(-1)?.category ?? 'other') : issues.length === 0 ? 'contract_pass' : issues.some((item) => item.reason === 'invalid_enum') ? 'enum_vocabulary_mismatch' : issues.some((item) => item.path.startsWith('signals')) ? 'nested_shape_mismatch' : issues.some((item) => item.reason === 'wrong_type') ? 'wrong_primitive_type' : issues.some((item) => item.reason === 'missing_field') ? 'missing_required_fields' : 'mixed_contract_failure',
     secondaryCategories: finalError?.diagnostics?.stage === 'context_schema_error' ? ['model_contract_noncompliance'] : [],
   };
-  const outputPath = resolve(process.cwd(), 'evaluation', 'reports', 'task09b-friday-contract-capture.json');
+  const reportName = evaluationModel === 'gemini-3.5-flash' ? 'task09b-friday-gemini-35-control.json' : lowReasoning ? 'task09b-friday-low-reasoning.json' : 'task09b-friday-contract-capture.json';
+  const outputPath = resolve(process.cwd(), 'evaluation', 'reports', reportName);
   await mkdir(dirname(outputPath), { recursive: true });
   await writeFile(outputPath, JSON.stringify(report, null, 2), 'utf8');
   console.log(JSON.stringify({ runId: report.runId, issueCount: issues.length, rootCause: report.rootCause, attempts: attempts.length }));

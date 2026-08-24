@@ -1,0 +1,44 @@
+{
+  "runId": "task09b-friday-contract-capture-02",
+  "transport": "evaluation-only PowerShell bridge",
+  "productionWorkerPathUsed": false,
+  "apiKeyConfigured": true,
+  "attempts": [
+    {
+      "attempt": 1,
+      "httpStatus": 503,
+      "latencyMs": 9611,
+      "category": "provider_temporarily_unavailable",
+      "responseReached": true,
+      "retryPerformed": true,
+      "parse": { "envelope": "not_reached", "assistantContent": "not_reached", "json": "not_reached" }
+    },
+    {
+      "attempt": 2,
+      "httpStatus": null,
+      "latencyMs": 30020,
+      "category": "evaluation_transport_timeout",
+      "responseReached": false,
+      "retryPerformed": false,
+      "parse": { "envelope": "not_reached", "assistantContent": "not_reached", "json": "not_reached" }
+    }
+  ],
+  "finalHttpStatus": null,
+  "contractValid": false,
+  "guardIssues": [],
+  "structuralSummary": "not_reached",
+  "enumSnapshot": "not_reached",
+  "evidence": { "total": 0, "exactMatches": 0, "invalid": 0 },
+  "semanticCheck": {
+    "developerFridayRiskContext": "unknown",
+    "sarcasmIronicPraise": "unknown",
+    "weekendImplication": "unknown",
+    "tone": "not_reached",
+    "register": "not_reached",
+    "communityContext": "not_reached",
+    "confidence": "not_reached",
+    "uncertaintyPresent": "not_reached"
+  },
+  "rootCause": "evaluation_transport_timeout",
+  "secondaryCategories": ["provider_temporarily_unavailable"]
+}
