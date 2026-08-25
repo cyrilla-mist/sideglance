@@ -1,0 +1,32 @@
+{
+  "runId": "task09b-fearless-gate-recovery",
+  "staticRootCause": "prompt_gate_contract_under_specified",
+  "promptChanged": true,
+  "model": "gemini-3.5-flash",
+  "reasoningEffort": "low",
+  "attempts": [
+    {
+      "attempt": 1,
+      "httpStatus": 200,
+      "latencyMs": 7627,
+      "jsonParse": "pass",
+      "gateContract": "fail",
+      "safeContractIssues": [
+        {
+          "path": "missingInformation",
+          "reason": "missing_field",
+          "expected": "non-empty string"
+        }
+      ],
+      "gateResult": "not_reached",
+      "questionCount": 0,
+      "questionQuality": false,
+      "interpreterInvoked": false,
+      "semanticConclusionMade": false,
+      "failureCategory": "invalid_contract",
+      "verdict": "FAIL",
+      "hardFailure": "gate_contract_noncompliance"
+    }
+  ],
+  "finalVerdict": "GATE_CONTRACT_NONCOMPLIANCE"
+}

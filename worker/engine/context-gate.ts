@@ -1,5 +1,5 @@
 import type { ContextGateResult, ContextSufficiency } from '../../shared/contracts/context-gate';
-import { assertContextGateResult } from '../../shared/schemas/context-gate';
+import { assertContextGateResult, diagnoseContextGateResult, type ContextGateIssue } from '../../shared/schemas/context-gate';
 import type { FetchLike } from '../providers/context-provider';
 
 export interface ContextGateEngine {
@@ -22,7 +22,7 @@ export class MockContextGateEngine implements ContextGateEngine {
 export type AIContextGateConfig = { apiKey?: string; endpoint?: string; model?: string; fetcher?: FetchLike; timeoutMs?: number; reasoningEffort?: 'low' | 'medium' | 'high' };
 
 export class ContextGateError extends Error {
-  constructor(public readonly stage: 'missing_api_key' | 'transport' | 'http_error' | 'invalid_json' | 'invalid_contract' | 'timeout', message: string, public readonly status?: number) {
+  constructor(public readonly stage: 'missing_api_key' | 'transport' | 'http_error' | 'invalid_json' | 'invalid_contract' | 'timeout', message: string, public readonly status?: number, public readonly issues?: ContextGateIssue[]) {
     super(message);
     this.name = 'ContextGateError';
   }
@@ -58,7 +58,7 @@ export class AIContextGateEngine implements ContextGateEngine {
       if (typeof content !== 'string') throw new ContextGateError('invalid_json', 'Context gate provider returned no JSON content.');
       let parsed: unknown;
       try { parsed = JSON.parse(content); } catch { throw new ContextGateError('invalid_json', 'Context gate returned invalid JSON content.'); }
-      try { return assertContextGateResult(parsed); } catch { throw new ContextGateError('invalid_contract', 'Context gate returned an invalid contract.'); }
+      try { return assertContextGateResult(parsed); } catch { throw new ContextGateError('invalid_contract', 'Context gate returned an invalid contract.', undefined, diagnoseContextGateResult(parsed).issues); }
     } catch (error) {
       if (error instanceof ContextGateError) throw error;
       if (controller.signal.aborted) throw new ContextGateError('timeout', 'Context gate request timed out.');
@@ -71,12 +71,14 @@ export class AIContextGateEngine implements ContextGateEngine {
 
 const gateSystemPrompt = `You are the Sideglance Context Gate. Decide only whether the supplied information is sufficient for a reliable context interpretation. Ask — do not guess.
 
-Return exactly one JSON object with these fields:
+Return only one JSON object using exactly this contract. Do not add fields or invent labels:
 status: exactly one of ready, needs_context
 confidence: exactly one of high, medium, low
 reason: exactly one of context_sufficient, ambiguous_phrase, insufficient_context
 sufficiency: object with boolean toneJudgment, socialImplication, usageBoundary
-For needs_context, include missingInformation and exactly one specific question. For ready, omit clarification fields. Do not output a full interpretation, sarcasm verdict, social essay, or demographic/identity inference.`;
+If status is ready, omit missingInformation and question entirely.
+If status is needs_context, include non-empty missingInformation and exactly one specific question ending with one question mark.
+Do not output a full interpretation, sarcasm verdict, social essay, or demographic/identity inference.`;
 
 function resolveEndpoint(endpoint: string): string {
   const url = new URL(endpoint);

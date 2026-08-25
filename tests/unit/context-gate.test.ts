@@ -51,6 +51,16 @@ describe('AIContextGateEngine contract seam', () => {
     const invalid = { ...needsContextResult, question: 'What happened? Who said it?' };
     const engine = new AIContextGateEngine({ apiKey: 'test-only', fetcher: async () => providerResponse(invalid) });
     await expect(engine.checkContext('input')).rejects.toBeInstanceOf(ContextGateError);
-    expect(diagnoseContextGateResult(invalid).issues.some((issue) => issue.path === 'question')).toBe(true);
+    expect(diagnoseContextGateResult(invalid).issues).toContainEqual({ path: 'question', reason: 'invalid_question', expected: 'exactly one specific question', receivedType: 'question_mark_count' });
+  });
+
+  it('diagnoses a missing needs_context question', () => {
+    const result = diagnoseContextGateResult({ ...needsContextResult, question: undefined });
+    expect(result.issues).toContainEqual({ path: 'question', reason: 'missing_field', expected: 'one specific question' });
+  });
+
+  it('diagnoses clarification fields on ready results', () => {
+    const result = diagnoseContextGateResult({ ...readyResult, question: 'What happened?' });
+    expect(result.issues).toContainEqual({ path: 'question', reason: 'invalid_ready_shape', expected: 'field must be omitted for ready', receivedType: 'string', receivedValue: 'What happened?' });
   });
 });

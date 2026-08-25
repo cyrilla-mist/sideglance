@@ -140,3 +140,15 @@ The grounding checkpoint was frozen in commit `6bb47b6` (`feat: validate context
 The model-only contract uses `evidenceRef`; `resolveContextEvidence` maps each reference to a catalog unit and creates the public `ContextSignal.evidenceQuote`. Unknown references hard-fail as `invalid_evidence_reference`; there is no fuzzy repair or fallback. The final pipeline is model envelope → JSON → model contract → reference resolution → final contract → exact grounding validator → decoded UI. The public `ContextAnalysis` and editorial UI remain unchanged except that displayed quotes now come from the deterministic resolver.
 
 Friday reference calibration used `gemini-3.5-flash` with low reasoning through the evaluation-only PowerShell bridge. Gate and interpreter returned HTTP `200`; all 3 evidence references resolved; final grounding was `3/3` exact with `0` invalid; semantic requirements passed and unsupported claims were absent. Classification: `GROUNDING_REFERENCE_PASS`. This is not a four-case preflight: Cases B-D and Gold Set were not run.
+
+## 09B.18 Full four-case preflight Round 2
+
+The evidence-reference architecture was frozen in commit `4eb75a8` (`feat: resolve model evidence from source references`) before this validation. Case A was independently rerun and passed: Gate HTTP `200`, interpreter HTTP `200`, model contract pass, 3/3 valid references, 3/3 exact grounding, and all semantic checks pass.
+
+Case B received HTTP `200` at the Gate stage but returned an invalid Gate contract. The interpreter was not invoked, and the preflight stopped as required. Cases C and D were not executed. Repository inspection found no existing README Gold/preflight fixture for Case D; no replacement case was invented. Overall result: `FAIL` due to `invalid_gate_or_provider_contract`, with D additionally unavailable as `missing_existing_readme_case`.
+
+## Fearless Alone Gate Recovery
+
+The preserved Round 2 failure remains unchanged: Case B returned HTTP `200`, the Gate contract was invalid, and interpretation did not run. The Gate diagnostic now reports safe field-level issues while retaining the boolean guard behavior. Static audit classified the original prompt as `prompt_gate_contract_under_specified`; it listed enums and the one-question rule but did not fully state the exact ready/needs_context shapes.
+
+The Gate prompt was minimally clarified to require exactly the existing JSON shape, omit clarification fields for `ready`, require non-empty `missingInformation` plus one question for `needs_context`, and prohibit invented fields or labels. The Gate-only recovery returned HTTP `200` in 7,627 ms and JSON parsing passed, but the model still omitted `missingInformation`. The interpreter was not invoked. Final classification: `GATE_CONTRACT_NONCOMPLIANCE`. Cases C-D, Gold Set, and further calibration were not run.

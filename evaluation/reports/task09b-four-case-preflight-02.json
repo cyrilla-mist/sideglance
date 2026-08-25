@@ -1,0 +1,98 @@
+{
+  "runId": "task09b-four-case-preflight-02",
+  "transport": "evaluation-only PowerShell bridge",
+  "productionWorkerPathUsed": false,
+  "model": "gemini-3.5-flash",
+  "reasoningEffort": "low",
+  "casesRequested": 4,
+  "casesRun": 2,
+  "results": [
+    {
+      "case": "A",
+      "model": "gemini-3.5-flash",
+      "attempt": 1,
+      "gate": {
+        "status": "ready",
+        "confidence": "high",
+        "reason": "context_sufficient",
+        "contract": "pass",
+        "clarificationQuestionCount": 0
+      },
+      "interpreterInvoked": true,
+      "requests": [
+        {
+          "stage": "gate",
+          "status": 200,
+          "latencyMs": 18426
+        },
+        {
+          "stage": "interpreter",
+          "status": 200,
+          "latencyMs": 16322
+        }
+      ],
+      "latencyMs": 34754,
+      "modelContract": "pass",
+      "evidenceRefs": {
+        "total": 3,
+        "valid": 3,
+        "invalid": 0
+      },
+      "finalContextAnalysisContract": "pass",
+      "grounding": {
+        "total": 3,
+        "exact": 3,
+        "invalid": 0
+      },
+      "semantic": {
+        "developerContext": true,
+        "ironicPraise": true,
+        "weekendRisk": true,
+        "pass": true
+      },
+      "unsupportedClaims": [],
+      "verdict": "PASS"
+    },
+    {
+      "case": "B",
+      "model": "gemini-3.5-flash",
+      "attempt": 1,
+      "gate": "failed_or_not_reached",
+      "interpreterInvoked": false,
+      "requests": [
+        {
+          "stage": "gate",
+          "status": 200,
+          "latencyMs": 5603
+        }
+      ],
+      "latencyMs": 5604,
+      "failure": {
+        "category": "invalid_contract",
+        "stage": "invalid_contract",
+        "status": 200
+      },
+      "verdict": "FAIL",
+      "hardFailure": "invalid_gate_or_provider_contract"
+    },
+    {
+      "case": "C",
+      "model": "gemini-3.5-flash",
+      "verdict": "NOT_RUN",
+      "note": "Stopped after earlier hard failure."
+    },
+    {
+      "case": "D",
+      "model": "gemini-3.5-flash",
+      "verdict": "NOT_RUN",
+      "note": "No README Gold/preflight fixture is present in the repository case registries."
+    }
+  ],
+  "hardFailures": [
+    "invalid_gate_or_provider_contract"
+  ],
+  "missingCases": [
+    "D: missing_existing_readme_case"
+  ],
+  "overallVerdict": "FAIL"
+}
