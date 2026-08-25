@@ -18,7 +18,9 @@ export function finishAttempt(attempt: number, startedAt: number, status: number
   return { attempt, started: true, status, latencyMs: Math.max(0, Math.round(endedAt - startedAt)), category, responseReached: status !== null };
 }
 
-export function classifyAttempt(status: number | null, stage: string, signalAborted = false): string {
+export function classifyAttempt(status: number | null, stage: string, signalAborted = false, transportCategory?: string): string {
+  if (transportCategory === 'shell_not_found' || transportCategory === 'shell_spawn_error' || transportCategory === 'powershell_script_error') return transportCategory;
+  if (transportCategory === 'powershell_timeout') return 'evaluation_transport_timeout';
   if (status === 400) return stage === 'gate' ? 'structured_gate_provider_rejection' : 'invalid_request';
   if (status === 401 || status === 403) return 'authentication_error';
   if (status === 404) return 'invalid_model_or_endpoint';
