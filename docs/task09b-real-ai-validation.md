@@ -164,3 +164,13 @@ The authorized Fearless Alone structured-output run made two fresh attempts. Bot
 The locally validated structured Gate implementation is frozen in commit `b169b57` (`feat: add structured output contract for context gate`). Provider acceptance remains unverified because the authorized structured Gate run reached two transport timeouts; no real model call is part of this case-design task.
 
 The official straightforward control case is now registered as `developer-readme-update` in the `developer_culture` category. It uses a routine README/setup exchange, expects `ready`, and permits zero signals because the current ContextAnalysis contract allows an empty signals array. Its evaluator forbids invented sarcasm, tension, warnings, risky deployment implications, platform claims, and unsupported relationship claims. This is a deterministic control asset, not a real-AI pass.
+
+## 09B.22 Full 4-Case Real-AI Preflight — Structured Gate Round
+
+The official real-AI order is B → A → C → D, using `gemini-3.5-flash`, low reasoning, and the evaluation-only PowerShell bridge. All cases use the provider-enforced strict JSON Schema Gate; no `json_object` fallback is permitted. The runner allows two fresh attempts for transient provider failures only, continues after case-level semantic or grounding failures, and stops for provider-wide blockers.
+
+The generated report is `evaluation/reports/task09b-four-case-preflight-03.json`. It separates Gate reliability, interpreter semantic quality, contract reliability, deterministic evidence-reference grounding, provider availability, and production transport status. Production Worker transport remains unvalidated. Gold Set and full evaluation are not run, and the report and this documentation entry remain uncommitted for review.
+
+## Manual Operator Run
+
+Codex execution approval blocked the external 09B.22 call; this is an execution-environment boundary, not a model or product failure. The user-operated local flow is available at `evaluation/scripts/run-task09b-preflight.ps1` and reuses the existing four-case runner in B → A → C → D order. It runs the local checks first, requires an explicit `YES`, and otherwise makes no network call. The existing evaluation-only PowerShell transport loads `.dev.vars` locally without placing credentials on the command line; the report is sanitized and production Worker transport remains unvalidated.
