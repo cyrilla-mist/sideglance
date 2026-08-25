@@ -10,12 +10,12 @@ import { AIContextGateEngine, ContextGateError } from '../../worker/engine/conte
 import { ContextProviderError, ModelContextProvider, type FetchLike } from '../../worker/providers/context-provider';
 import { createPowerShellGeminiFetcher, loadEvaluationModelEnvironment, type PowerShellGeminiFetcher } from '../transports/powershell-gemini-transport';
 import { task09bPreflightCases } from '../cases/task09b-preflight';
+import { classifyAttempt, finishAttempt, structuredGateAcceptance, validatePreflightReport, type AttemptRecord } from './preflight-telemetry';
 
 const model = 'gemini-3.5-flash';
 const reasoningEffort = 'low' as const;
 type CaseSpec = { id: 'A' | 'B' | 'C' | 'D'; input: string; context?: string; expectedGate: 'ready' | 'needs_context'; kind: 'friday' | 'isolated' | 'praise' | 'readme' };
 type Stage = 'gate' | 'interpreter';
-type RequestRecord = { stage: Stage; status: number | null; latencyMs: number };
 const order: CaseSpec['id'][] = ['B', 'A', 'C', 'D'];
 const cases = order.map((id) => {
   const item = task09bPreflightCases[id];
@@ -24,18 +24,24 @@ const cases = order.map((id) => {
 
 async function runCase(spec: CaseSpec, environment: Awaited<ReturnType<typeof loadEvaluationModelEnvironment>>): Promise<Record<string, unknown>> {
   let lastFailure: Record<string, unknown> | undefined;
+  const gateAttemptRecords: AttemptRecord[] = [];
+  const interpreterAttemptRecords: AttemptRecord[] = [];
+  let retryPerformed = false;
+  let backoffMs = 0;
+  let gate: Record<string, unknown> | undefined;
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     const baseFetcher = createPowerShellGeminiFetcher(environment);
-    const requests: RequestRecord[] = [];
     let stage: Stage = 'gate';
     const catalog = buildEvidenceCatalog(spec.input, spec.context);
     let modelRefCount = 0;
     let validRefCount = 0;
     const fetcher: FetchLike = async (input, init) => {
-      const started = Date.now();
+      const started = performance.now();
+      const records = stage === 'gate' ? gateAttemptRecords : interpreterAttemptRecords;
+      const attemptNumber = records.length + 1;
       try {
         const response = await baseFetcher(input, init);
-        requests.push({ stage, status: response.status, latencyMs: Date.now() - started });
+        records.push(finishAttempt(attemptNumber, started, response.status, classifyAttempt(response.status, stage)));
         if (stage === 'interpreter' && response.ok) {
           const payload = await response.clone().json().catch(() => undefined) as { choices?: Array<{ message?: { content?: unknown } }> } | undefined;
           const content = payload?.choices?.[0]?.message?.content;
@@ -48,42 +54,48 @@ async function runCase(spec: CaseSpec, environment: Awaited<ReturnType<typeof lo
         }
         return response;
       } catch (error) {
-        requests.push({ stage, status: baseFetcher.lastResponse?.status ?? null, latencyMs: Date.now() - started });
+        const status = baseFetcher.lastResponse?.status ?? null;
+        records.push(finishAttempt(attemptNumber, started, status, classifyAttempt(status, stage, init?.signal?.aborted ?? false)));
         throw error;
       }
     };
-    const started = Date.now();
+    const started = performance.now();
     try {
       const gateResult = await new AIContextGateEngine({ apiKey: environment.MODEL_API_KEY, endpoint: environment.MODEL_API_URL, model, fetcher, reasoningEffort }).checkContext(spec.input, spec.context);
-      const gate = summarizeGate(gateResult, spec.expectedGate);
-      if (gateResult.status !== spec.expectedGate) return { case: spec.id, model, gateAttempts: attempt, gate, interpreterInvoked: false, requests, verdict: 'FAIL', hardFailure: 'gate_logic_failure' };
-      if (spec.kind === 'isolated') return isolatedResult(spec, attempt, gateResult, requests, started);
+      gate = summarizeGate(gateResult, spec.expectedGate, structuredGateAcceptance(gateAttemptRecords, true));
+      if (gateResult.status !== spec.expectedGate) return { case: spec.id, model, gateAttempts: gateAttemptRecords.length, gateAttemptRecords, interpreterAttempts: 0, interpreterAttemptRecords, retryPerformed, backoffMs, gate, interpreterInvoked: false, verdict: 'FAIL', hardFailure: 'gate_logic_failure' };
+      if (spec.kind === 'isolated') return isolatedResult(spec, gateResult, gateAttemptRecords, interpreterAttemptRecords, retryPerformed, backoffMs, started);
       stage = 'interpreter';
       const analysis = await new AIContextEngine(new ModelContextProvider({ apiKey: environment.MODEL_API_KEY, endpoint: environment.MODEL_API_URL, model, fetcher, responseFormat: true })).analyze(spec.input, spec.context);
-      return interpretedResult(spec, attempt, gate, requests, started, analysis, modelRefCount, validRefCount);
+      return interpretedResult(spec, gate!, gateAttemptRecords, interpreterAttemptRecords, retryPerformed, backoffMs, started, analysis, modelRefCount, validRefCount);
     } catch (error) {
-      const failure = failureSummary(error, baseFetcher, attempt, requests, started);
-      lastFailure = { case: spec.id, model, gateAttempts: stage === 'gate' ? attempt : attempt, interpreterAttempts: stage === 'interpreter' ? attempt : 0, requests, failure, interpreterInvoked: stage === 'interpreter' };
-      if (isSchemaIncompatibility(error, stage, baseFetcher)) return { ...lastFailure, verdict: 'GATE_JSON_SCHEMA_PROVIDER_INCOMPATIBILITY', hardFailure: 'GATE_JSON_SCHEMA_PROVIDER_INCOMPATIBILITY' };
-      if (isAuthenticationFailure(error, baseFetcher)) return { ...lastFailure, verdict: 'PROVIDER_BLOCKED', providerBlocked: true, hardFailure: 'authentication_failure' };
-      if (!isRetryable(error, baseFetcher)) return { ...lastFailure, verdict: 'FAIL', hardFailure: failure.category };
-      if (attempt === 2) return { ...lastFailure, verdict: 'PROVIDER_BLOCKED', providerBlocked: true };
+      const failure = failureSummary(error, baseFetcher, attempt, started);
+      const schemaRejected = isSchemaIncompatibility(error, stage, baseFetcher);
+      const acceptance = schemaRejected ? 'rejected' : structuredGateAcceptance(gateAttemptRecords, Boolean(gate), false);
+      lastFailure = { case: spec.id, model, gateAttempts: gateAttemptRecords.length, gateAttemptRecords, interpreterAttempts: interpreterAttemptRecords.length, interpreterAttemptRecords, retryPerformed, backoffMs, gate: gate ?? { structuredGateProviderAcceptance: acceptance, structuredGateProviderAccepted: acceptance === 'verified' }, failure, interpreterInvoked: stage === 'interpreter' };
+      if (schemaRejected) return { ...lastFailure, structuredGateProviderAcceptance: 'rejected', structuredGateProviderAccepted: false, verdict: 'GATE_JSON_SCHEMA_PROVIDER_INCOMPATIBILITY', hardFailure: 'GATE_JSON_SCHEMA_PROVIDER_INCOMPATIBILITY' };
+      if (isAuthenticationFailure(error, baseFetcher)) return { ...lastFailure, structuredGateProviderAcceptance: acceptance, structuredGateProviderAccepted: acceptance === 'verified', verdict: 'PROVIDER_BLOCKED', providerBlocked: true, hardFailure: 'authentication_failure' };
+      if (!isRetryable(error, baseFetcher)) return { ...lastFailure, structuredGateProviderAcceptance: acceptance, structuredGateProviderAccepted: acceptance === 'verified', verdict: 'FAIL', hardFailure: failure.category };
+      if (attempt === 2) return { ...lastFailure, structuredGateProviderAcceptance: acceptance, structuredGateProviderAccepted: acceptance === 'verified', verdict: 'PROVIDER_BLOCKED', providerBlocked: true };
+      retryPerformed = true;
+      backoffMs = 100;
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, backoffMs));
     }
   }
-  return { ...(lastFailure ?? { case: spec.id, model }), verdict: 'PROVIDER_BLOCKED', providerBlocked: true };
+  return { ...(lastFailure ?? { case: spec.id, model }), gateAttempts: gateAttemptRecords.length, gateAttemptRecords, interpreterAttempts: interpreterAttemptRecords.length, interpreterAttemptRecords, retryPerformed, backoffMs, verdict: 'PROVIDER_BLOCKED', providerBlocked: true };
 }
 
-function summarizeGate(result: ContextGateResult, expected: CaseSpec['expectedGate']): Record<string, unknown> {
-  return { expected: expected, result: result.status, confidence: result.confidence, reason: result.reason, missingInformation: result.missingInformation ?? null, question: result.question ?? null, questionCount: typeof result.question === 'string' ? (result.question.match(/\?/g) ?? []).length : 0, sufficiency: result.sufficiency, structuredOutputAccepted: true, contract: 'pass' };
+function summarizeGate(result: ContextGateResult, expected: CaseSpec['expectedGate'], acceptance: string): Record<string, unknown> {
+  return { expected: expected, result: result.status, confidence: result.confidence, reason: result.reason, missingInformation: result.missingInformation ?? null, question: result.question ?? null, questionCount: typeof result.question === 'string' ? (result.question.match(/\?/g) ?? []).length : 0, sufficiency: result.sufficiency, structuredGateProviderAcceptance: acceptance, structuredGateProviderAccepted: acceptance === 'verified', contract: 'pass' };
 }
 
-function isolatedResult(spec: CaseSpec, attempt: number, gateResult: ContextGateResult, requests: RequestRecord[], started: number): Record<string, unknown> {
+function isolatedResult(spec: CaseSpec, gateResult: ContextGateResult, gateAttemptRecords: AttemptRecord[], interpreterAttemptRecords: AttemptRecord[], retryPerformed: boolean, backoffMs: number, started: number): Record<string, unknown> {
   const questionCount = typeof gateResult.question === 'string' ? (gateResult.question.match(/\?/g) ?? []).length : 0;
   const pass = questionCount === 1 && Boolean(gateResult.missingInformation?.trim());
-  return { case: spec.id, model, gateAttempts: attempt, gate: summarizeGate(gateResult, spec.expectedGate), interpreterInvoked: false, interpreterAttempts: 0, requests, gateLatencyMs: requests.filter((r) => r.stage === 'gate').at(-1)?.latencyMs ?? Date.now() - started, missingInformation: gateResult.missingInformation, clarificationQuestionCount: questionCount, clarificationQuestionQuality: pass ? 'minimum surrounding context' : 'invalid', semantic: { noConfidentConclusion: pass, noIdentitySpeculation: pass }, verdict: pass ? 'PASS' : 'FAIL', ...(pass ? {} : { hardFailure: 'gate_logic_failure' }) };
+  return { case: spec.id, model, gateAttempts: gateAttemptRecords.length, gateAttemptRecords, interpreterAttempts: interpreterAttemptRecords.length, interpreterAttemptRecords, retryPerformed, backoffMs, gate: summarizeGate(gateResult, spec.expectedGate, 'verified'), structuredGateProviderAcceptance: 'verified', structuredGateProviderAccepted: true, interpreterInvoked: false, gateLatencyMs: gateAttemptRecords.at(-1)?.latencyMs ?? Math.round(performance.now() - started), missingInformation: gateResult.missingInformation, clarificationQuestionCount: questionCount, clarificationQuestionQuality: pass ? 'minimum surrounding context' : 'invalid', semantic: { noConfidentConclusion: pass, noIdentitySpeculation: pass }, verdict: pass ? 'PASS' : 'FAIL', ...(pass ? {} : { hardFailure: 'gate_logic_failure' }) };
 }
 
-function interpretedResult(spec: CaseSpec, attempt: number, gate: Record<string, unknown>, requests: RequestRecord[], started: number, analysis: ContextAnalysis, modelRefCount: number, validRefCount: number): Record<string, unknown> {
+function interpretedResult(spec: CaseSpec, gate: Record<string, unknown>, gateAttemptRecords: AttemptRecord[], interpreterAttemptRecords: AttemptRecord[], retryPerformed: boolean, backoffMs: number, started: number, analysis: ContextAnalysis, modelRefCount: number, validRefCount: number): Record<string, unknown> {
   const contract = diagnoseContextAnalysis(analysis);
   const grounding = validateContextEvidence(analysis, [spec.input, spec.context ?? ''].filter(Boolean).join('\n'));
   const text = JSON.stringify(analysis).toLowerCase();
@@ -95,13 +107,13 @@ function interpretedResult(spec: CaseSpec, attempt: number, gate: Record<string,
   const unsupportedClaims = [/discord|github/.test(text) ? 'unsupported_platform_claim' : '', /production definitely failed|deploy definitely broke|deployment definitely broke/.test(text) ? 'unsupported_failure_claim' : '', /identity|demographic|friend|teammate|coworker|relationship/.test(text) && spec.kind === 'praise' ? 'unsupported_relationship_claim' : ''].filter(Boolean);
   const semanticPass = Object.values(semantic).every(Boolean);
   const pass = contract.valid && modelRefCount === validRefCount && grounding.invalid.length === 0 && grounding.exactMatches === grounding.total && semanticPass && unsupportedClaims.length === 0;
-  return { case: spec.id, model, gateAttempts: attempt, gate, interpreterInvoked: true, interpreterAttempts: 1, requests, interpreterLatencyMs: requests.filter((r) => r.stage === 'interpreter').at(-1)?.latencyMs ?? Date.now() - started, modelContextAnalysisContract: contract.valid ? 'pass' : 'fail', evidenceRefs: { total: modelRefCount, valid: validRefCount, invalid: modelRefCount - validRefCount }, finalContextAnalysisContract: contract.valid ? 'pass' : 'fail', grounding: { total: grounding.total, exact: grounding.exactMatches, invalid: grounding.invalid.length }, semantic: { ...semantic, pass: semanticPass }, unsupportedClaims, verdict: pass ? 'PASS' : 'FAIL', ...(pass ? {} : { hardFailure: grounding.invalid.length ? 'hallucinated_evidence' : 'semantic_or_contract_failure' }) };
+  return { case: spec.id, model, gateAttempts: gateAttemptRecords.length, gateAttemptRecords, interpreterAttempts: interpreterAttemptRecords.length, interpreterAttemptRecords, retryPerformed, backoffMs, gate, structuredGateProviderAcceptance: 'verified', structuredGateProviderAccepted: true, interpreterInvoked: true, interpreterLatencyMs: interpreterAttemptRecords.at(-1)?.latencyMs ?? Math.round(performance.now() - started), modelContextAnalysisContract: contract.valid ? 'pass' : 'fail', evidenceRefs: { total: modelRefCount, valid: validRefCount, invalid: modelRefCount - validRefCount }, finalContextAnalysisContract: contract.valid ? 'pass' : 'fail', grounding: { total: grounding.total, exact: grounding.exactMatches, invalid: grounding.invalid.length }, semantic: { ...semantic, pass: semanticPass }, unsupportedClaims, verdict: pass ? 'PASS' : 'FAIL', ...(pass ? {} : { hardFailure: grounding.invalid.length ? 'hallucinated_evidence' : 'semantic_or_contract_failure' }) };
 }
 
-function failureSummary(error: unknown, fetcher: PowerShellGeminiFetcher, attempt: number, requests: RequestRecord[], started: number): Record<string, unknown> {
-  if (error instanceof ContextGateError) return { category: categoryFor(error.status, error.stage), stage: error.stage, status: error.status ?? fetcher.lastResponse?.status ?? null, latencyMs: Date.now() - started, attempt, providerMessage: error.providerMessage };
-  if (error instanceof ContextProviderError) return { category: categoryFor(error.diagnostics?.status, error.diagnostics?.stage), stage: error.diagnostics?.stage ?? 'provider_error', status: error.diagnostics?.status ?? fetcher.lastResponse?.status ?? null, latencyMs: Date.now() - started, attempt, providerMessage: error.diagnostics?.providerMessage, evidenceRefs: { total: error.diagnostics?.evidenceTotal, valid: error.diagnostics?.evidenceExactMatches, invalid: error.diagnostics?.evidenceInvalid } };
-  return { category: 'provider_transport_error', stage: 'transport', status: fetcher.lastResponse?.status ?? null, latencyMs: Date.now() - started, attempt };
+function failureSummary(error: unknown, fetcher: PowerShellGeminiFetcher, attempt: number, started: number): Record<string, unknown> {
+  if (error instanceof ContextGateError) return { category: categoryFor(error.status, error.stage), stage: error.stage, status: error.status ?? fetcher.lastResponse?.status ?? null, latencyMs: Math.round(performance.now() - started), attempt, providerMessage: error.providerMessage };
+  if (error instanceof ContextProviderError) return { category: categoryFor(error.diagnostics?.status, error.diagnostics?.stage), stage: error.diagnostics?.stage ?? 'provider_error', status: error.diagnostics?.status ?? fetcher.lastResponse?.status ?? null, latencyMs: Math.round(performance.now() - started), attempt, providerMessage: error.diagnostics?.providerMessage, evidenceRefs: { total: error.diagnostics?.evidenceTotal, valid: error.diagnostics?.evidenceExactMatches, invalid: error.diagnostics?.evidenceInvalid } };
+  return { category: 'provider_transport_error', stage: 'transport', status: fetcher.lastResponse?.status ?? null, latencyMs: Math.round(performance.now() - started), attempt };
 }
 
 function categoryFor(status: number | null | undefined, stage: string | undefined): string {
@@ -130,8 +142,11 @@ async function main(): Promise<void> {
   }
   for (const remaining of cases.slice(results.length)) results.push({ case: remaining.id, model, verdict: 'NOT_RUN', note: 'Stopped after provider-wide blocker.' });
   const overall = results.some((r) => r.verdict === 'GATE_JSON_SCHEMA_PROVIDER_INCOMPATIBILITY') ? 'GATE_JSON_SCHEMA_PROVIDER_INCOMPATIBILITY' : results.some((r) => r.providerBlocked) ? 'PROVIDER_BLOCKED' : results.length === cases.length && results.every((r) => r.verdict === 'PASS') ? 'PASS' : 'FAIL';
-  const report = { runId: 'task09b-four-case-preflight-03', transport: 'evaluation-only PowerShell bridge', productionWorkerPathUsed: false, model, reasoningEffort, casesRequested: 4, casesRun: results.filter((r) => r.verdict !== 'NOT_RUN').length, results, hardFailures: results.filter((r) => r.hardFailure).map((r) => r.hardFailure), providerBlockedCases: results.filter((r) => r.providerBlocked).map((r) => r.case), structuredGateProviderAccepted: !results.some((r) => r.verdict === 'GATE_JSON_SCHEMA_PROVIDER_INCOMPATIBILITY'), overallVerdict: overall };
-  const path = resolve(process.cwd(), 'evaluation', 'reports', 'task09b-four-case-preflight-03.json');
+  const structuredAcceptance = results.some((r) => r.structuredGateProviderAcceptance === 'rejected') ? 'rejected' : results.some((r) => r.structuredGateProviderAcceptance === 'verified') ? 'verified' : 'unverified';
+  const report = { runId: 'task09b-four-case-preflight-04', transport: 'evaluation-only PowerShell bridge', productionWorkerPathUsed: false, model, reasoningEffort, casesRequested: 4, casesRun: results.filter((r) => r.verdict !== 'NOT_RUN').length, results, hardFailures: results.filter((r) => r.hardFailure).map((r) => r.hardFailure), providerBlockedCases: results.filter((r) => r.providerBlocked).map((r) => r.case), structuredGateProviderAcceptance: structuredAcceptance, structuredGateProviderAccepted: structuredAcceptance === 'verified', overallVerdict: overall };
+  const integrityErrors = validatePreflightReport(report as unknown as Record<string, unknown>);
+  if (integrityErrors.length > 0) throw new Error(`Preflight report integrity failure: ${integrityErrors.join(', ')}`);
+  const path = resolve(process.cwd(), 'evaluation', 'reports', 'task09b-four-case-preflight-04.json');
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, JSON.stringify(report, null, 2), 'utf8');
   console.log(JSON.stringify({ runId: report.runId, casesRun: report.casesRun, overallVerdict: report.overallVerdict }));

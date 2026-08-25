@@ -1,0 +1,58 @@
+{
+  "runId": "task09b-four-case-preflight-03",
+  "transport": "evaluation-only PowerShell bridge",
+  "productionWorkerPathUsed": false,
+  "model": "gemini-3.5-flash",
+  "reasoningEffort": "low",
+  "casesRequested": 4,
+  "casesRun": 1,
+  "results": [
+    {
+      "case": "B",
+      "model": "gemini-3.5-flash",
+      "gateAttempts": 2,
+      "interpreterAttempts": 0,
+      "requests": [
+        {
+          "stage": "gate",
+          "status": null,
+          "latencyMs": 5
+        }
+      ],
+      "failure": {
+        "category": "provider_transport_timeout",
+        "stage": "transport",
+        "status": null,
+        "latencyMs": 5,
+        "attempt": 2
+      },
+      "interpreterInvoked": false,
+      "verdict": "PROVIDER_BLOCKED",
+      "providerBlocked": true
+    },
+    {
+      "case": "A",
+      "model": "gemini-3.5-flash",
+      "verdict": "NOT_RUN",
+      "note": "Stopped after provider-wide blocker."
+    },
+    {
+      "case": "C",
+      "model": "gemini-3.5-flash",
+      "verdict": "NOT_RUN",
+      "note": "Stopped after provider-wide blocker."
+    },
+    {
+      "case": "D",
+      "model": "gemini-3.5-flash",
+      "verdict": "NOT_RUN",
+      "note": "Stopped after provider-wide blocker."
+    }
+  ],
+  "hardFailures": [],
+  "providerBlockedCases": [
+    "B"
+  ],
+  "structuredGateProviderAccepted": true,
+  "overallVerdict": "PROVIDER_BLOCKED"
+}

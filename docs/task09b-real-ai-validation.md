@@ -174,3 +174,9 @@ The generated report is `evaluation/reports/task09b-four-case-preflight-03.json`
 ## Manual Operator Run
 
 Codex execution approval blocked the external 09B.22 call; this is an execution-environment boundary, not a model or product failure. The user-operated local flow is available at `evaluation/scripts/run-task09b-preflight.ps1` and reuses the existing four-case runner in B → A → C → D order. It runs the local checks first, requires an explicit `YES`, and otherwise makes no network call. The existing evaluation-only PowerShell transport loads `.dev.vars` locally without placing credentials on the command line; the report is sanitized and production Worker transport remains unvalidated.
+
+## Preflight Telemetry Repair
+
+The user-operated run `task09b-four-case-preflight-03.json` genuinely reached `PROVIDER_BLOCKED`; A/C/D correctly remained `NOT_RUN`. It is preserved as `evaluation/reports/task09b-four-case-preflight-03-telemetry-defect.json` with its original fields unchanged. That historical report contains known attempt-recording and structured-Gate acceptance-state defects and must not be used to verify provider acceptance.
+
+Before any further real-AI conclusion, the evaluation runner now records each started external attempt independently with attempt-local monotonic latency, status, category, and response reachability. Counts derive from record lengths, retry backoff is separate, and report integrity is checked before writing. Structured Gate acceptance is `verified` only after a successful structured result, `rejected` only after explicit provider rejection, and otherwise `unverified`. The next manual run writes `evaluation/reports/task09b-four-case-preflight-04.json`.

@@ -44,7 +44,7 @@ if ($confirmation -cne 'YES') {
 
 npm.cmd exec vite-node -- evaluation/runners/task09b-four-case-preflight-03.ts
 $runnerExitCode = $LASTEXITCODE
-$reportPath = 'evaluation/reports/task09b-four-case-preflight-03.json'
+$reportPath = 'evaluation/reports/task09b-four-case-preflight-04.json'
 
 if (Test-Path -LiteralPath $reportPath -PathType Leaf) {
   $report = Get-Content -Raw -LiteralPath $reportPath | ConvertFrom-Json
