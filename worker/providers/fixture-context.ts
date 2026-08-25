@@ -48,3 +48,16 @@ export const touchGrassContextAnalysis: ContextAnalysis = {
     { phrase: 'grass', signalType: 'wording', explanation: 'The ordinary image creates a contrast with excessive online focus.', evidenceQuote: 'grass' },
   ],
 };
+
+export const straightforwardReadmeContextAnalysis: ContextAnalysis = {
+  literalMeaning: 'One person updated README setup documentation and environment variable names; the other will review it later.',
+  contextualMeaning: 'This is a straightforward documentation update and a routine acknowledgement.',
+  tone: ['neutral'],
+  register: 'technical',
+  communityContext: 'A direct developer documentation exchange.',
+  socialImplication: 'No hidden interpersonal meaning is required to understand the exchange.',
+  usageBoundary: { naturalIn: 'Developer teams', beCarefulIn: 'Formal release notes', avoidIn: 'Unrelated personal conversations' },
+  confidence: 'high',
+  uncertainty: 'The exchange does not provide a reason to infer additional subtext.',
+  signals: [],
+};

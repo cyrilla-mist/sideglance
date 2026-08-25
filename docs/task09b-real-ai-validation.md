@@ -158,3 +158,9 @@ The Gate prompt was minimally clarified to require exactly the existing JSON sha
 The previous Gate relied on prompt-only structural discipline, which still allowed a response to omit required `missingInformation`. The public `ContextGateResult` semantics were not changed. `AIContextGateEngine` now requests `response_format.type = json_schema` with separate strict `ready` and `needs_context` branches, while the deterministic Gate diagnostic remains the final guard.
 
 The authorized Fearless Alone structured-output run made two fresh attempts. Both timed out after approximately 30 seconds without an HTTP response, so structured-output acceptance, JSON parsing, and Gate contract validation were not reached. No fallback request without the schema was made. Final classification: `PROVIDER_BLOCKED`. Cases C-D and Gold Set were not run.
+
+## 09B.21 Structured Gate freeze and straightforward control case
+
+The locally validated structured Gate implementation is frozen in commit `b169b57` (`feat: add structured output contract for context gate`). Provider acceptance remains unverified because the authorized structured Gate run reached two transport timeouts; no real model call is part of this case-design task.
+
+The official straightforward control case is now registered as `developer-readme-update` in the `developer_culture` category. It uses a routine README/setup exchange, expects `ready`, and permits zero signals because the current ContextAnalysis contract allows an empty signals array. Its evaluator forbids invented sarcasm, tension, warnings, risky deployment implications, platform claims, and unsupported relationship claims. This is a deterministic control asset, not a real-AI pass.

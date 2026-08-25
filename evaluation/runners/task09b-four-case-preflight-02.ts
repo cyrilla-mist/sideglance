@@ -8,19 +8,12 @@ import { AIContextEngine } from '../../worker/engine/context-engine';
 import { AIContextGateEngine, ContextGateError } from '../../worker/engine/context-gate';
 import { ContextProviderError, ModelContextProvider, type FetchLike } from '../../worker/providers/context-provider';
 import { createPowerShellGeminiFetcher, loadEvaluationModelEnvironment, type PowerShellGeminiFetcher } from '../transports/powershell-gemini-transport';
+import { task09bPreflightCases } from '../cases/task09b-preflight';
 
 const model = 'gemini-3.5-flash';
-const friday = 'Nora: just merged the auth rewrite into main\n\nKai: on a friday??\n\nLeo: fearless behavior 💀\n\nNora: wait what\n\nKai: nothing. enjoy your weekend';
-const isolated = 'fearless behavior 💀';
-const praise = { input: 'fearless behavior', context: 'Mia: I finally spoke up about the issue.\n\nAlex: That was fearless behavior.' };
-
-type CaseSpec = { id: 'A' | 'B' | 'C'; input: string; context?: string; expectedGate: 'ready' | 'needs_context'; kind: 'friday' | 'isolated' | 'praise' };
+type CaseSpec = { id: 'A' | 'B' | 'C' | 'D'; input: string; context?: string; expectedGate: 'ready' | 'needs_context'; kind: 'friday' | 'isolated' | 'praise' | 'readme' };
 type RequestRecord = { stage: 'gate' | 'interpreter'; status: number | null; latencyMs: number };
-const runnableCases: CaseSpec[] = [
-  { id: 'A', input: friday, expectedGate: 'ready', kind: 'friday' },
-  { id: 'B', input: isolated, expectedGate: 'needs_context', kind: 'isolated' },
-  { id: 'C', input: praise.input, context: praise.context, expectedGate: 'ready', kind: 'praise' },
-];
+const runnableCases: CaseSpec[] = (Object.entries(task09bPreflightCases) as Array<[CaseSpec['id'], typeof task09bPreflightCases[keyof typeof task09bPreflightCases]]>).map(([id, item]) => ({ id, input: item.input, context: 'context' in item ? item.context : undefined, expectedGate: item.expectedGate, kind: item.kind }));
 
 async function runCase(spec: CaseSpec, environment: Awaited<ReturnType<typeof loadEvaluationModelEnvironment>>): Promise<Record<string, unknown>> {
   for (let attempt = 1; attempt <= 2; attempt += 1) {
@@ -79,7 +72,9 @@ function interpretedResult(spec: CaseSpec, modelName: string, attempt: number, g
   const text = JSON.stringify(analysis).toLowerCase();
   const semantic = spec.kind === 'friday'
     ? { developerContext: /developer|technical|coding|software|auth|merge|main/.test(text), ironicPraise: analysis.tone.includes('sarcastic') || analysis.tone.includes('playful') || /ironic|sarcasm/.test(text), weekendRisk: /weekend|friday/.test(text) }
-    : { sincerePraise: analysis.tone.includes('sincere'), warmth: /support|encourag|affirm|brave|difficult/.test(text), noSarcasmContamination: !analysis.tone.includes('sarcastic') && !/sarcasm|ironic/.test(text) };
+    : spec.kind === 'praise'
+      ? { sincerePraise: analysis.tone.includes('sincere'), warmth: /support|encourag|affirm|brave|difficult/.test(text), noSarcasmContamination: !analysis.tone.includes('sarcastic') && !/sarcasm|ironic/.test(text) }
+      : { straightforward: !analysis.tone.includes('sarcastic') && !analysis.tone.includes('critical'), noInterpersonalTension: !/tension|passive.aggressive|frustration|warning/.test(text), noCulturalOverread: !/community norm|cultural subtext|slang/.test(text) };
   const semanticPass = Object.values(semantic).every(Boolean);
   const unsupportedClaims = [/discord|github/.test(text) ? 'unsupported_platform_claim' : '', /production definitely failed|deploy definitely broke|deployment definitely broke/.test(text) ? 'unsupported_failure_claim' : '', /identity|demographic|friend|teammate|coworker|relationship/.test(text) && spec.kind === 'praise' ? 'unsupported_relationship_claim' : ''].filter(Boolean);
   const pass = contract.valid && modelRefCount === validRefCount && grounding.invalid.length === 0 && grounding.exactMatches === grounding.total && semanticPass && unsupportedClaims.length === 0;
@@ -108,10 +103,8 @@ async function main(): Promise<void> {
   }
   const hardFailure = results.find((result) => result.hardFailure);
   for (const remaining of runnableCases.slice(results.length)) results.push({ case: remaining.id, model, verdict: 'NOT_RUN', note: 'Stopped after earlier hard failure.' });
-  const dMissing = { case: 'D', model, verdict: 'NOT_RUN', note: 'No README Gold/preflight fixture is present in the repository case registries.' };
-  results.push(dMissing);
   const overall = hardFailure ? 'FAIL' : results.some((result) => result.providerBlocked) ? 'PROVIDER_BLOCKED' : results.some((result) => result.verdict === 'NOT_RUN') ? 'other' : 'PASS';
-  const report = { runId: 'task09b-four-case-preflight-02', transport: 'evaluation-only PowerShell bridge', productionWorkerPathUsed: false, model, reasoningEffort: 'low', casesRequested: 4, casesRun: results.filter((result) => result.verdict !== 'NOT_RUN').length, results, hardFailures: hardFailure ? [hardFailure.hardFailure] : [], missingCases: ['D: missing_existing_readme_case'], overallVerdict: overall };
+  const report = { runId: 'task09b-four-case-preflight-02', transport: 'evaluation-only PowerShell bridge', productionWorkerPathUsed: false, model, reasoningEffort: 'low', casesRequested: 4, casesRun: results.filter((result) => result.verdict !== 'NOT_RUN').length, results, hardFailures: hardFailure ? [hardFailure.hardFailure] : [], overallVerdict: overall };
   const path = resolve(process.cwd(), 'evaluation', 'reports', 'task09b-four-case-preflight-02.json');
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, JSON.stringify(report, null, 2), 'utf8');

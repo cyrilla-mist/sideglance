@@ -11,6 +11,7 @@ export const goldCases: EvaluationCase[] = [
   { id: 'developer-breaking-change', category: 'developer_culture', input: 'breaking change', expected: { register: 'technical', communityContext: 'technical meaning' } },
   { id: 'developer-works-on-my-machine', category: 'developer_culture', input: 'works on my machine', expected: { register: 'technical', communityContext: 'developer humor', tone: ['teasing'] } },
   { id: 'developer-friday-deploy', category: 'developer_culture', input: 'Friday deploy', expected: { register: 'technical', communityContext: 'developer norm', uncertaintyRequired: true } },
+  { id: 'developer-readme-update', category: 'developer_culture', input: 'Sam: I updated the README with the setup steps and the new environment variable names.\n\nMina: Thanks, I’ll review it this afternoon.', expected: { register: 'technical', forbiddenClaims: ['sarcastic reading', 'passive-aggressive', 'interpersonal tension', 'secret frustration', 'hidden warning', 'risky deploy', 'Discord', 'GitHub', 'unsupported relationship'] } },
   { id: 'tone-interesting-choice', category: 'social_tone', input: 'interesting choice', expected: { tone: ['negative', 'ambiguous'], uncertaintyRequired: true } },
   { id: 'tone-bold-move', category: 'social_tone', input: 'bold move', expected: { tone: ['ambiguous'], uncertaintyRequired: true } },
   { id: 'tone-nice-one', category: 'social_tone', input: 'nice one', expected: { tone: ['positive', 'ambiguous'], uncertaintyRequired: true } },

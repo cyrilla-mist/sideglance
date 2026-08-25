@@ -14,4 +14,5 @@ export const contextGateCases: ContextGateEvaluationCase[] = [
   { id: 'gate-interesting-choice', input: 'interesting choice', expectedStatus: 'needs_context' },
   { id: 'gate-friday-merge', input: 'Kai: on a friday??\n\nLeo: fearless behavior 💀', expectedStatus: 'ready' },
   { id: 'gate-sincere-fearless', input: 'fearless behavior', context: 'Mia: I finally spoke up about the issue.\n\nAlex: That was fearless behavior.', expectedStatus: 'ready' },
+  { id: 'developer-readme-update', input: 'Sam: I updated the README with the setup steps and the new environment variable names.\n\nMina: Thanks, I’ll review it this afternoon.', expectedStatus: 'ready' },
 ];

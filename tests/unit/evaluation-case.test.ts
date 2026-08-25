@@ -4,7 +4,7 @@ import { assertEvaluationCase, isEvaluationCase } from '../../evaluation/schemas
 
 describe('evaluation case schema', () => {
   it('contains 20 strongly typed gold cases', () => {
-    expect(goldCases).toHaveLength(20);
+    expect(goldCases).toHaveLength(21);
     expect(goldCases.every((item) => isEvaluationCase(item))).toBe(true);
     expect(assertEvaluationCase(goldCases[0])).toEqual(goldCases[0]);
   });
