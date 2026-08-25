@@ -152,3 +152,9 @@ Case B received HTTP `200` at the Gate stage but returned an invalid Gate contra
 The preserved Round 2 failure remains unchanged: Case B returned HTTP `200`, the Gate contract was invalid, and interpretation did not run. The Gate diagnostic now reports safe field-level issues while retaining the boolean guard behavior. Static audit classified the original prompt as `prompt_gate_contract_under_specified`; it listed enums and the one-question rule but did not fully state the exact ready/needs_context shapes.
 
 The Gate prompt was minimally clarified to require exactly the existing JSON shape, omit clarification fields for `ready`, require non-empty `missingInformation` plus one question for `needs_context`, and prohibit invented fields or labels. The Gate-only recovery returned HTTP `200` in 7,627 ms and JSON parsing passed, but the model still omitted `missingInformation`. The interpreter was not invoked. Final classification: `GATE_CONTRACT_NONCOMPLIANCE`. Cases C-D, Gold Set, and further calibration were not run.
+
+## Provider-Enforced Gate Contract
+
+The previous Gate relied on prompt-only structural discipline, which still allowed a response to omit required `missingInformation`. The public `ContextGateResult` semantics were not changed. `AIContextGateEngine` now requests `response_format.type = json_schema` with separate strict `ready` and `needs_context` branches, while the deterministic Gate diagnostic remains the final guard.
+
+The authorized Fearless Alone structured-output run made two fresh attempts. Both timed out after approximately 30 seconds without an HTTP response, so structured-output acceptance, JSON parsing, and Gate contract validation were not reached. No fallback request without the schema was made. Final classification: `PROVIDER_BLOCKED`. Cases C-D and Gold Set were not run.

@@ -1,6 +1,7 @@
 import type { ContextGateResult, ContextSufficiency } from '../../shared/contracts/context-gate';
 import { assertContextGateResult, diagnoseContextGateResult, type ContextGateIssue } from '../../shared/schemas/context-gate';
 import type { FetchLike } from '../providers/context-provider';
+import { contextGateResponseFormat } from '../../shared/schemas/context-gate-json';
 
 export interface ContextGateEngine {
   checkContext(input: string, additionalContext?: string): Promise<ContextGateResult>;
@@ -22,7 +23,7 @@ export class MockContextGateEngine implements ContextGateEngine {
 export type AIContextGateConfig = { apiKey?: string; endpoint?: string; model?: string; fetcher?: FetchLike; timeoutMs?: number; reasoningEffort?: 'low' | 'medium' | 'high' };
 
 export class ContextGateError extends Error {
-  constructor(public readonly stage: 'missing_api_key' | 'transport' | 'http_error' | 'invalid_json' | 'invalid_contract' | 'timeout', message: string, public readonly status?: number, public readonly issues?: ContextGateIssue[]) {
+  constructor(public readonly stage: 'missing_api_key' | 'transport' | 'http_error' | 'invalid_json' | 'invalid_contract' | 'timeout', message: string, public readonly status?: number, public readonly issues?: ContextGateIssue[], public readonly providerMessage?: string) {
     super(message);
     this.name = 'ContextGateError';
   }
@@ -47,12 +48,15 @@ export class AIContextGateEngine implements ContextGateEngine {
           model: this.config.model ?? 'gpt-4o-mini',
           temperature: 0,
           ...(this.config.reasoningEffort ? { reasoning_effort: this.config.reasoningEffort } : {}),
-          response_format: { type: 'json_object' },
+          response_format: contextGateResponseFormat,
           messages: [{ role: 'system', content: gateSystemPrompt }, { role: 'user', content: `Assess whether this input has enough context for a reliable interpretation.\nInput:\n${input}${additionalContext?.trim() ? `\nAdditional context:\n${additionalContext.trim()}` : ''}` }],
         }),
         signal: controller.signal,
       });
-      if (!response.ok) throw new ContextGateError('http_error', 'Context gate provider returned an HTTP error.', response.status);
+      if (!response.ok) {
+        const responseText = await response.text().catch(() => '');
+        throw new ContextGateError('http_error', 'Context gate provider returned an HTTP error.', response.status, undefined, safeProviderMessage(responseText));
+      }
       const payload = await response.json().catch(() => { throw new ContextGateError('invalid_json', 'Context gate provider returned invalid JSON.'); }) as { choices?: Array<{ message?: { content?: unknown } }> };
       const content = payload.choices?.[0]?.message?.content;
       if (typeof content !== 'string') throw new ContextGateError('invalid_json', 'Context gate provider returned no JSON content.');
@@ -85,6 +89,18 @@ function resolveEndpoint(endpoint: string): string {
   if (url.pathname.endsWith('/chat/completions')) return url.toString();
   url.pathname = `${url.pathname.replace(/\/$/, '')}/chat/completions`;
   return url.toString();
+}
+
+function safeProviderMessage(responseText: string): string {
+  try {
+    const payload = JSON.parse(responseText) as { error?: { message?: unknown } };
+    if (typeof payload.error?.message === 'string') return redactDiagnosticText(payload.error.message);
+  } catch { /* Use bounded text below. */ }
+  return redactDiagnosticText(responseText) || 'Provider returned an error.';
+}
+
+function redactDiagnosticText(value: string): string {
+  return value.replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [redacted]').replace(/https?:\/\/[^\s)]+/gi, '[url redacted]').replace(/\s+/g, ' ').trim().slice(0, 500);
 }
 
 function needsContext(missingInformation: string, question: string): ContextGateResult {

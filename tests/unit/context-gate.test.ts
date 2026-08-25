@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { contextGateCases } from '../../evaluation/cases/context-gate';
 import { AIContextGateEngine, ContextGateError, MockContextGateEngine } from '../../worker/engine/context-gate';
 import { diagnoseContextGateResult, isContextGateResult } from '../../shared/schemas/context-gate';
+import { contextGateResponseFormat, contextGateJsonSchema, CONTEXT_GATE_SCHEMA_CONFIDENCE_VALUES, CONTEXT_GATE_SCHEMA_REASON_VALUES, CONTEXT_GATE_SCHEMA_STATUS_VALUES } from '../../shared/schemas/context-gate-json';
 
 describe('MockContextGateEngine', () => {
   it('keeps the ambiguous inputs behind the context gate', async () => {
@@ -62,5 +63,25 @@ describe('AIContextGateEngine contract seam', () => {
   it('diagnoses clarification fields on ready results', () => {
     const result = diagnoseContextGateResult({ ...readyResult, question: 'What happened?' });
     expect(result.issues).toContainEqual({ path: 'question', reason: 'invalid_ready_shape', expected: 'field must be omitted for ready', receivedType: 'string', receivedValue: 'What happened?' });
+  });
+
+  it('keeps the provider schema vocabulary aligned with the shared Gate contract', () => {
+    const branches = contextGateJsonSchema.oneOf;
+    expect(CONTEXT_GATE_SCHEMA_STATUS_VALUES).toEqual(['ready', 'needs_context']);
+    expect(CONTEXT_GATE_SCHEMA_CONFIDENCE_VALUES).toEqual(['high', 'medium', 'low']);
+    expect(CONTEXT_GATE_SCHEMA_REASON_VALUES).toEqual(['context_sufficient', 'ambiguous_phrase', 'insufficient_context']);
+    expect(branches[0].required).toEqual(['status', 'confidence', 'reason', 'sufficiency']);
+    expect(branches[1].required).toContain('missingInformation');
+    expect(branches[1].required).toContain('question');
+  });
+
+  it('sends provider-enforced JSON schema rather than json_object', async () => {
+    let requestBody: { response_format?: unknown } | undefined;
+    const engine = new AIContextGateEngine({ apiKey: 'test-only', fetcher: async (_input, init) => {
+      requestBody = JSON.parse(String(init?.body)) as { response_format?: unknown };
+      return providerResponse(readyResult);
+    } });
+    await engine.checkContext('surrounding exchange');
+    expect(requestBody?.response_format).toEqual(contextGateResponseFormat);
   });
 });

@@ -1,0 +1,44 @@
+{
+  "runId": "task09b-fearless-structured-gate",
+  "model": "gemini-3.5-flash",
+  "reasoningEffort": "low",
+  "responseFormatMode": "json_schema",
+  "transport": "evaluation-only PowerShell bridge",
+  "attempts": [
+    {
+      "attempt": 1,
+      "httpStatus": null,
+      "latencyMs": 30034,
+      "structuredOutputAccepted": false,
+      "safeProviderCategory": "timeout",
+      "jsonParse": "not_reached",
+      "gateContract": "not_reached",
+      "safeContractIssues": [],
+      "gateResult": "not_reached",
+      "missingInformationPresent": false,
+      "questionCount": 0,
+      "questionQuality": false,
+      "interpreterInvoked": false,
+      "semanticConclusionMade": false,
+      "verdict": "RETRYABLE"
+    },
+    {
+      "attempt": 2,
+      "httpStatus": null,
+      "latencyMs": 30026,
+      "structuredOutputAccepted": false,
+      "safeProviderCategory": "timeout",
+      "jsonParse": "not_reached",
+      "gateContract": "not_reached",
+      "safeContractIssues": [],
+      "gateResult": "not_reached",
+      "missingInformationPresent": false,
+      "questionCount": 0,
+      "questionQuality": false,
+      "interpreterInvoked": false,
+      "semanticConclusionMade": false,
+      "verdict": "RETRYABLE"
+    }
+  ],
+  "finalVerdict": "PROVIDER_BLOCKED"
+}

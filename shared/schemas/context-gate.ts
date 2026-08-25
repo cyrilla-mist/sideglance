@@ -1,4 +1,5 @@
 import type { ContextGateResult } from '../contracts/context-gate';
+import { CONTEXT_GATE_CONFIDENCE_VALUES, CONTEXT_GATE_REASON_VALUES, CONTEXT_GATE_STATUS_VALUES } from './context-gate-values';
 
 export type ContextGateIssue = { path: string; reason: 'missing_field' | 'wrong_type' | 'invalid_enum' | 'invalid_ready_shape' | 'invalid_needs_context_shape' | 'invalid_question' | 'unexpected_nullability' | 'other'; expected: string; receivedType?: string; receivedValue?: string };
 
@@ -6,9 +7,9 @@ export function diagnoseContextGateResult(value: unknown): { valid: boolean; iss
   const issues: ContextGateIssue[] = [];
   if (!value || typeof value !== 'object' || Array.isArray(value)) return { valid: false, issues: [{ path: '$', reason: 'wrong_type', expected: 'object', receivedType: describeType(value) }] };
   const result = value as Record<string, unknown>;
-  requireEnum(result, 'status', ['ready', 'needs_context'], issues);
-  requireEnum(result, 'confidence', ['high', 'medium', 'low'], issues);
-  requireEnum(result, 'reason', ['context_sufficient', 'ambiguous_phrase', 'insufficient_context'], issues);
+  requireEnum(result, 'status', CONTEXT_GATE_STATUS_VALUES, issues);
+  requireEnum(result, 'confidence', CONTEXT_GATE_CONFIDENCE_VALUES, issues);
+  requireEnum(result, 'reason', CONTEXT_GATE_REASON_VALUES, issues);
   const sufficiency = result.sufficiency;
   if (!sufficiency || typeof sufficiency !== 'object' || Array.isArray(sufficiency)) issues.push({ path: 'sufficiency', reason: 'other', expected: 'object', receivedType: describeType(sufficiency) });
   else for (const key of ['toneJudgment', 'socialImplication', 'usageBoundary']) if (typeof (sufficiency as Record<string, unknown>)[key] !== 'boolean') issues.push({ path: `sufficiency.${key}`, reason: 'wrong_type', expected: 'boolean', receivedType: describeType((sufficiency as Record<string, unknown>)[key]) });
