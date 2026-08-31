@@ -12,6 +12,6 @@ This is a user-operated workflow. Do not paste an account ID, API token, or secr
 6. Run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-production-smoke.ps1 -ProductionUrl <deployed-worker-url>`. Health runs first; the model-calling cases require typing exactly `YES`.
 7. Review the sanitized reports under `docs/reports/`.
 
-Production configuration is `CONTEXT_ENGINE_MODE=ai`, `MODEL_TRANSPORT=cloudflare_ai_gateway_byok`, the existing `MODEL_NAME`, and the account ID plus two credential secrets. The request is sent to `/v1/{account_id}/default/compat/chat/completions` with `google-ai-studio/{MODEL_NAME}`. `PRODUCTION_MODEL_FINALIZATION_PENDING_EVALUATION` remains true.
+Production Worker is `sideglance-worker-production`. Configuration is `CONTEXT_ENGINE_MODE=ai`, `MODEL_TRANSPORT=cloudflare_ai_gateway_byok`, the existing `MODEL_NAME`, and the account ID plus two credential secrets. The request is sent to `/v1/{account_id}/default/compat/chat/completions` with `google-ai-studio/{MODEL_NAME}`. `PRODUCTION_MODEL_FINALIZATION_PENDING_EVALUATION` remains true.
 
 The deploy and smoke operators stop on failed prerequisites, do not auto-confirm, do not print raw model output, and do not create reports for actions that did not happen.

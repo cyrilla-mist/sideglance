@@ -4,8 +4,12 @@ Set-Location $root
 $blockers = [System.Collections.Generic.List[string]]::new()
 
 function Run-Check([string]$Label, [string]$Command) {
-  & powershell.exe -NoProfile -Command $Command *> $null
-  if ($LASTEXITCODE -ne 0) { $blockers.Add($Label) }
+  $previous = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  & cmd.exe /d /c $Command 1>$null 2>$null
+  $code = $LASTEXITCODE
+  $ErrorActionPreference = $previous
+  if ($code -ne 0) { $blockers.Add($Label) }
 }
 
 Run-Check 'unit tests' 'npm.cmd test'
@@ -21,8 +25,6 @@ if (Test-Path (Join-Path $root '.git\index')) {
   $tracked = git ls-files -- '.dev.vars' '.dev.vars.*' | Out-String
   if ($tracked.Trim()) { $blockers.Add('.dev.vars is tracked') }
 }
-if (-not $env:CLOUDFLARE_ACCOUNT_ID -and $config -notmatch 'CLOUDFLARE_ACCOUNT_ID\s*=') { $blockers.Add('Cloudflare account ID is not configured') }
-
 if (Get-Command wrangler -ErrorAction SilentlyContinue) {
   $ErrorActionPreference = 'Continue'
   & wrangler whoami 2>$null | Out-Null
@@ -33,6 +35,7 @@ if (Get-Command wrangler -ErrorAction SilentlyContinue) {
     if ($secretNames -notmatch 'MODEL_API_KEY') { $blockers.Add('MODEL_API_KEY is not configured') }
     if ($secretNames -notmatch 'CLOUDFLARE_ACCOUNT_ID') { $blockers.Add('CLOUDFLARE_ACCOUNT_ID is not configured') }
   }
+  else { $blockers.Add('Production secret names could not be verified') }
   & wrangler deploy --env production --dry-run 2>$null | Out-Null
   if ($LASTEXITCODE -ne 0) { $blockers.Add('Wrangler bundle dry-run failed') }
   $ErrorActionPreference = 'Stop'

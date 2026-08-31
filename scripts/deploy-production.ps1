@@ -12,7 +12,7 @@ $deployOutput = & npx.cmd wrangler deploy --env production 2>&1 | Out-String
 if ($LASTEXITCODE -ne 0) { Write-Output 'DEPLOY_FAILED'; exit 1 }
 $reportDir = Join-Path $root 'docs/reports'
 New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
-$report = [ordered]@{ success = $true; workerName = 'sideglance-worker'; productionUrl = if ($ProductionUrl) { $ProductionUrl } else { $null }; deployedAt = $started.ToUniversalTime().ToString('o') }
+$report = [ordered]@{ success = $true; workerName = 'sideglance-worker-production'; productionUrl = if ($ProductionUrl) { $ProductionUrl } else { $null }; deployedAt = $started.ToUniversalTime().ToString('o') }
 $report | ConvertTo-Json | Set-Content (Join-Path $reportDir 'task10-production-deploy.json') -Encoding UTF8
 Write-Output 'DEPLOY_SUCCESS'
 Write-Output 'Sanitized deployment report written to docs/reports/task10-production-deploy.json.'

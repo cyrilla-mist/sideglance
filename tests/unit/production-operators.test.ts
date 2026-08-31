@@ -37,8 +37,9 @@ describe('production operator safeguards', () => {
     for (const path of ['worker/index.ts', 'worker/routes/decode.ts', 'worker/providers/model-transport.ts']) expect(read(path)).not.toContain("from '../../evaluation/");
   });
   it('blocks readiness until account and runtime secrets are configured', () => {
-    expect(readiness).toContain('Cloudflare account ID is not configured');
     expect(readiness).toContain('CLOUDFLARE_AIG_TOKEN is not configured');
     expect(readiness).toContain('CLOUDFLARE_ACCOUNT_ID is not configured');
+    expect(readiness).toContain('MODEL_API_KEY is not configured');
+    expect(readiness).not.toContain('$env:CLOUDFLARE_ACCOUNT_ID');
   });
 });

@@ -7,6 +7,9 @@ CONTEXT_ENGINE_MODE = "ai"
 MODEL_TRANSPORT = "cloudflare_ai_gateway_byok"
 MODEL_NAME = "gemini-3.7-flash"
 
+[env.production]
+name = "sideglance-worker-production"
+
 [dev]
 ip = "127.0.0.1"
 port = 8787
