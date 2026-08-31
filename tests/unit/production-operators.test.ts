@@ -26,6 +26,23 @@ describe('production operator safeguards', () => {
     expect(deploy).toContain("$confirmation -cne 'DEPLOY'");
     expect(deploy).toContain('wrangler deploy --env production');
     expect(deploy).toContain("workerName = 'sideglance-worker-production'");
+    expect(deploy).toContain('deployExitCode');
+    expect(deploy).toContain('2>&1');
+    expect(deploy).not.toContain('SilentlyContinue');
+  });
+  it('treats stderr warnings as output when native exit code is zero', () => {
+    expect(deploy).toContain('$deployOutput | ForEach-Object { Write-Output $_ }');
+    expect(deploy).toContain('if ($deployExitCode -ne 0)');
+  });
+  it('fails when the native process fails or produces no credible route URL', () => {
+    expect(deploy).toContain("$deployExitCode = 1");
+    expect(deploy).toContain('no credible workers.dev URL found');
+    expect(deploy).toContain("Write-Output 'DEPLOY_FAILED'");
+  });
+  it('captures and sanitizes the workers.dev deployment report', () => {
+    expect(deploy).toContain('workers\\.dev');
+    expect(deploy).toContain('productionUrl = $workersDevUrl');
+    expect(deploy).toContain('timestamp =');
   });
   it('runs health before requiring YES for model calls', () => {
     expect(smoke.indexOf('healthResponse')).toBeLessThan(smoke.indexOf("Type YES to authorize"));
@@ -46,5 +63,8 @@ describe('production operator safeguards', () => {
     expect(readiness).toContain('MODEL_API_KEY is not configured');
     expect(readiness).not.toContain('$env:CLOUDFLARE_ACCOUNT_ID');
     expect(readiness).toContain('secret list --env production');
+  });
+  it('enables explicit workers.dev routing for production', () => {
+    expect(read('wrangler.toml')).toContain('workers_dev = true');
   });
 });

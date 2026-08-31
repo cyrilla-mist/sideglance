@@ -9,6 +9,7 @@ MODEL_NAME = "gemini-3.7-flash"
 
 [env.production]
 name = "sideglance-worker-production"
+workers_dev = true
 
 [dev]
 ip = "127.0.0.1"
