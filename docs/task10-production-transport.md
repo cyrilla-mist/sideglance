@@ -30,13 +30,13 @@ Non-secret Worker variables:
 - `CONTEXT_ENGINE_MODE=ai`
 - `MODEL_TRANSPORT=cloudflare_ai_gateway`
 - `MODEL_NAME=<approved production model>`
-- `CLOUDFLARE_ACCOUNT_ID=<account id>`
+- `CLOUDFLARE_ACCOUNT_ID=<account id>` (the operator stores this as a Worker secret so account metadata is not committed)
 
 Worker secret:
 
-- `CLOUDFLARE_API_TOKEN` — Cloudflare API token with the minimum AI Gateway/AI API run permission required by the account.
+- `CLOUDFLARE_API_TOKEN` — Cloudflare API token with `Account → Workers AI → Read` permission for the inference REST endpoint. AI Gateway management permissions are not required by this implementation.
 
-Do not use `VITE_` for the token, put it in tracked files, or log it. Future setup is: authenticate Wrangler if needed; confirm AI Gateway/Unified Billing access; create the scoped token; run `wrangler secret put CLOUDFLARE_API_TOKEN`; configure the non-secret variables; run `scripts/check-production-readiness.ps1`; deploy; then run the production smoke plan below. This task performs none of those remote actions.
+Do not use `VITE_` for the token, put it in tracked files, or log it. Confirm sufficient Cloudflare Unified Billing / AI Gateway credits before production use. Future setup is documented in `docs/task10-production-setup.md`; this task performs none of those remote actions.
 
 ## Reliability and safety
 

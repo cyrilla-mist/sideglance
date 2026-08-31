@@ -27,7 +27,12 @@ if (Get-Command wrangler -ErrorAction SilentlyContinue) {
   $ErrorActionPreference = 'Continue'
   & wrangler whoami 2>$null | Out-Null
   if ($LASTEXITCODE -ne 0) { $blockers.Add('Wrangler authentication is not confirmed') }
-  & wrangler deploy --dry-run 2>$null | Out-Null
+  $secretNames = (& wrangler secret list --env production 2>$null | Out-String)
+  if ($LASTEXITCODE -eq 0) {
+    if ($secretNames -notmatch 'CLOUDFLARE_API_TOKEN') { $blockers.Add('CLOUDFLARE_API_TOKEN is not configured') }
+    if ($secretNames -notmatch 'CLOUDFLARE_ACCOUNT_ID') { $blockers.Add('CLOUDFLARE_ACCOUNT_ID is not configured') }
+  }
+  & wrangler deploy --env production --dry-run 2>$null | Out-Null
   if ($LASTEXITCODE -ne 0) { $blockers.Add('Wrangler bundle dry-run failed') }
   $ErrorActionPreference = 'Stop'
 }

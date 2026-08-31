@@ -3,6 +3,7 @@ main = "worker/index.ts"
 compatibility_date = "2026-08-21"
 
 [env.production.vars]
+CONTEXT_ENGINE_MODE = "ai"
 MODEL_TRANSPORT = "cloudflare_ai_gateway"
 MODEL_NAME = "gemini-3.7-flash"
 
