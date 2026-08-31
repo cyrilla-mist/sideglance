@@ -1,5 +1,5 @@
 import { assertDecodeResponse, parseDecodeRequest } from '../../shared/schemas/decode';
-import type { DecodeResponse } from '../../shared/contracts/decode';
+import type { DecodeResponse, FailureDiagnosticCode } from '../../shared/contracts/decode';
 import { FixtureProvider } from '../providers/fixture-provider';
 import type { ContextAnalysis } from '../../shared/contracts/context';
 import type { ContextEngine } from '../engine/context-engine';
@@ -49,9 +49,9 @@ export async function handleDecode(request: Request, env: WorkerEnv = {}): Promi
     if (decoded.type !== 'decoded') return json(decoded, 200);
     return json(assertDecodeResponse(contextAnalysis ? { ...decoded, contextAnalysis } : decoded), 200);
   } catch (error) {
-    if (error instanceof ContextProviderError) return json({ type: 'failed', errorCode: error.code === 'hallucinated_evidence' || error.code === 'invalid_evidence_reference' ? 'model_unavailable' : error.code, message: error.code === 'hallucinated_evidence' || error.code === 'invalid_evidence_reference' ? 'We could not verify the model explanation.' : error.message }, 502);
-    if (error instanceof ContextGateError) return json({ type: 'failed', errorCode: contextGateErrorCode(error), message: error.stage === 'missing_api_key' ? 'Context model API key is not configured.' : 'Context gate is unavailable.' }, 502);
-    if (error instanceof ModelTransportError) return json({ type: 'failed', errorCode: 'model_unavailable', message: 'Context model is unavailable.' }, 502);
+    if (error instanceof ContextProviderError) return json({ type: 'failed', errorCode: error.code === 'hallucinated_evidence' || error.code === 'invalid_evidence_reference' ? 'model_unavailable' : error.code, message: error.code === 'hallucinated_evidence' || error.code === 'invalid_evidence_reference' ? 'We could not verify the model explanation.' : error.message, ...(providerDiagnosticCode(error) ? { diagnosticCode: providerDiagnosticCode(error) } : {}) }, 502);
+    if (error instanceof ContextGateError) return json({ type: 'failed', errorCode: contextGateErrorCode(error), message: error.stage === 'missing_api_key' ? 'Context model API key is not configured.' : 'Context gate is unavailable.', ...(gateDiagnosticCode(error) ? { diagnosticCode: gateDiagnosticCode(error) } : {}) }, 502);
+    if (error instanceof ModelTransportError) return json({ type: 'failed', errorCode: 'model_unavailable', message: 'Context model is unavailable.', diagnosticCode: transportDiagnosticCode(error) }, 502);
     return json({ type: 'failed', errorCode: 'invalid_request', message: error instanceof Error ? error.message : 'Invalid decode request.' }, 400);
   }
 }
@@ -62,6 +62,45 @@ function contextGateErrorCode(error: ContextGateError): 'context_timeout' | 'con
   if (error.stage === 'invalid_json') return 'context_invalid_json';
   if (error.stage === 'invalid_contract') return 'context_schema_invalid';
   return 'model_unavailable';
+}
+
+function providerDiagnosticCode(error: ContextProviderError): FailureDiagnosticCode | undefined {
+  if (error.code === 'context_timeout') return 'provider_timeout';
+  if (error.code === 'context_invalid_json' || error.code === 'context_schema_invalid') return 'model_contract_error';
+  if (error.code === 'invalid_evidence_reference' || error.code === 'hallucinated_evidence') return 'model_contract_error';
+  const diagnostics = error.diagnostics;
+  if (diagnostics?.status !== undefined && diagnostics.status !== null) return statusDiagnosticCode(diagnostics.status, diagnostics.providerMessage);
+  if (diagnostics?.stage === 'timeout') return 'provider_timeout';
+  if (diagnostics?.stage === 'fetch_error') return 'transport_error';
+  return undefined;
+}
+
+function gateDiagnosticCode(error: ContextGateError): FailureDiagnosticCode | undefined {
+  if (error.stage === 'timeout') return 'provider_timeout';
+  if (error.stage === 'transport') return 'transport_error';
+  if (error.stage === 'invalid_json' || error.stage === 'invalid_contract') return 'model_contract_error';
+  if (error.stage === 'http_error') return statusDiagnosticCode(error.status ?? 502, error.providerMessage);
+  return undefined;
+}
+
+function transportDiagnosticCode(error: ModelTransportError): FailureDiagnosticCode {
+  if (error.category === 'gateway_auth_error') return 'gateway_auth_error';
+  if (error.category === 'gateway_rate_limited') return 'gateway_rate_limited';
+  if (error.category === 'gateway_provider_unavailable') return 'gateway_provider_unavailable';
+  if (error.category === 'gateway_timeout') return 'provider_timeout';
+  if (error.category === 'gateway_invalid_request') return statusDiagnosticCode(error.status ?? 400, error.providerMessage);
+  return 'transport_error';
+}
+
+function statusDiagnosticCode(status: number, providerMessage?: string): FailureDiagnosticCode {
+  if (status === 401 || status === 403) return 'gateway_auth_error';
+  if (status === 429) return 'gateway_rate_limited';
+  if (status >= 500 && status <= 504) return 'gateway_provider_unavailable';
+  if (status >= 400 && status < 500) {
+    if (providerMessage && /schema|response[_ -]?format|structured|json_schema/i.test(providerMessage)) return 'structured_output_rejected';
+    return 'gateway_invalid_request';
+  }
+  return 'unknown_502';
 }
 
 function json(value: DecodeResponse, status: number): Response { return Response.json(value, { status }); }

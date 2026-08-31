@@ -1,5 +1,6 @@
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:http';
 import { delimiter, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
@@ -131,5 +132,58 @@ describe('production operator safeguards', () => {
       if (existsSync(reportPath)) unlinkSync(reportPath);
       rmSync(tempRoot, { recursive: true, force: true });
     }
+  }, 30000);
+  it('preserves safe non-2xx diagnostics and continues every smoke case on a local fixture server', () => {
+    const reportPath = join(process.cwd(), 'docs/reports/task10-production-smoke.json');
+    const run = (responses: Array<{ status: number; body: string; contentType?: string }>) => new Promise<{ status: number | null; stdout: string }>((resolve, reject) => {
+      let index = 0;
+      const server = createServer((request, response) => {
+        const fixture = responses[index++];
+        if (!fixture) { response.writeHead(500); response.end('unexpected request'); return; }
+        response.writeHead(fixture.status, { 'content-type': fixture.contentType ?? 'application/json' });
+        response.end(fixture.body);
+      });
+      server.listen(0, '127.0.0.1', () => {
+        const address = server.address();
+        if (!address || typeof address === 'string') { server.close(); reject(new Error('Could not start fixture server.')); return; }
+        const child = spawn('powershell.exe', [
+          '-NoProfile',
+          '-ExecutionPolicy', 'Bypass',
+          '-File', join(process.cwd(), 'scripts/run-production-smoke.ps1'),
+          '-ProductionUrl', `http://127.0.0.1:${address.port}`,
+        ], { encoding: 'utf8' });
+        let stdout = '';
+        child.stdout.on('data', (chunk) => { stdout += chunk.toString(); });
+        child.on('error', reject);
+        child.on('close', (status) => { server.close(); resolve({ status, stdout }); });
+        child.stdin.write('YES\n');
+        child.stdin.end();
+      });
+    });
+    const json = (value: unknown) => JSON.stringify(value);
+    return run([
+        { status: 200, body: json({ ok: true, service: 'sideglance-worker' }) },
+        { status: 502, body: json({ type: 'failed', message: 'Context gate is unavailable.', diagnosticCode: 'gateway_auth_error' }) },
+        { status: 502, body: json({ type: 'failed', message: 'Context model is unavailable.', diagnosticCode: 'gateway_provider_unavailable' }) },
+        { status: 502, body: 'upstream provider body Bearer secret-must-not-persist', contentType: 'text/plain' },
+        { status: 400, body: json({ type: 'failed', errorCode: 'invalid_request', message: 'Request body must be valid JSON.' }) },
+        { status: 400, body: json({ type: 'failed', errorCode: 'invalid_request', message: 'inputText exceeds the maximum length.' }) },
+      ]).then((result) => {
+        expect(result.status).toBe(1);
+        const report = JSON.parse(readFileSync(reportPath, 'utf8').replace(/^\uFEFF/, ''));
+        expect(report.cases).toHaveLength(5);
+        expect(report.cases.map((item: { caseId: string }) => item.caseId)).toEqual(['ambiguous', 'friday', 'straightforward', 'malformed', 'oversized']);
+        expect(report.cases[0]).toMatchObject({ httpStatus: 502, responseType: 'failed', safeCode: 'gateway_auth_error', verdict: 'FAIL' });
+        expect(report.cases[1]).toMatchObject({ httpStatus: 502, safeCode: 'gateway_provider_unavailable', verdict: 'FAIL' });
+        expect(report.cases[2]).toMatchObject({ httpStatus: 502, safeCode: 'unknown_502', verdict: 'FAIL' });
+        expect(report.cases[3]).toMatchObject({ httpStatus: 400, responseType: 'failed', safeCode: 'invalid_request', verdict: 'PASS' });
+        expect(report.cases[4]).toMatchObject({ httpStatus: 400, responseType: 'failed', safeCode: 'invalid_request', verdict: 'PASS' });
+        expect(report.finalVerdict).toBe('PRODUCTION_SMOKE_FAILED');
+        const raw = readFileSync(reportPath, 'utf8');
+        expect(raw).not.toContain('secret-must-not-persist');
+        expect(raw).not.toContain('Authorization');
+      }).finally(() => {
+        if (existsSync(reportPath)) unlinkSync(reportPath);
+      });
   }, 30000);
 });

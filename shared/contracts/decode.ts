@@ -42,6 +42,21 @@ export type FailedResponse = {
   type: 'failed';
   errorCode: 'invalid_request' | 'unknown_fixture' | 'invalid_response' | 'context_timeout' | 'context_invalid_json' | 'context_schema_invalid' | 'missing_api_key' | 'model_unavailable';
   message: string;
+  diagnosticCode?: FailureDiagnosticCode;
 };
+
+export type FailureDiagnosticCode =
+  | 'gateway_auth_error'
+  | 'google_auth_error'
+  | 'gateway_invalid_request'
+  | 'gateway_provider_unavailable'
+  | 'gateway_rate_limited'
+  | 'structured_output_rejected'
+  | 'provider_model_error'
+  | 'provider_timeout'
+  | 'model_contract_error'
+  | 'transport_error'
+  | 'worker_internal_error'
+  | 'unknown_502';
 
 export type DecodeResponse = DecodedResponse | NeedsContextResponse | FailedResponse;
