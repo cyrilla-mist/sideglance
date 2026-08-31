@@ -13,6 +13,9 @@ describe('production operator safeguards', () => {
     expect(configure).toContain('secret put CLOUDFLARE_AIG_TOKEN');
     expect(configure).not.toMatch(/param\s*\([^)]*token/i);
     expect(configure).not.toMatch(/CLOUDFLARE_API_TOKEN\s*=\s*['\"]/i);
+    expect(configure).toContain('secret list --env production');
+    expect(configure).toContain('if (-not $hasAigToken)');
+    expect(configure).toContain('if (-not $hasGoogleKey)');
   });
   it('documents the AI Gateway token path without a billing requirement', () => {
     expect(read('docs/task10-production-setup.md')).toContain('AI Gateway token');
@@ -22,6 +25,7 @@ describe('production operator safeguards', () => {
   it('requires exact DEPLOY before invoking Wrangler deploy', () => {
     expect(deploy).toContain("$confirmation -cne 'DEPLOY'");
     expect(deploy).toContain('wrangler deploy --env production');
+    expect(deploy).toContain("workerName = 'sideglance-worker-production'");
   });
   it('runs health before requiring YES for model calls', () => {
     expect(smoke.indexOf('healthResponse')).toBeLessThan(smoke.indexOf("Type YES to authorize"));
@@ -41,5 +45,6 @@ describe('production operator safeguards', () => {
     expect(readiness).toContain('CLOUDFLARE_ACCOUNT_ID is not configured');
     expect(readiness).toContain('MODEL_API_KEY is not configured');
     expect(readiness).not.toContain('$env:CLOUDFLARE_ACCOUNT_ID');
+    expect(readiness).toContain('secret list --env production');
   });
 });
