@@ -184,3 +184,7 @@ Before any further real-AI conclusion, the evaluation runner now records each st
 ## 09B.27 Evaluation PowerShell host compatibility
 
 Run 04 remains historical and unchanged. Its two immediate `evaluation_transport_error` attempts likely occurred before provider access because the evaluation transport hardcoded `pwsh`, while the user host provides Windows PowerShell. Structured Gate acceptance remains `unverified`; Run 04 must not be interpreted as a Gemini failure. The evaluation-only transport now selects `pwsh` first and `powershell.exe` second, reports shell/PowerShell failures separately from provider timeouts, and uses Windows PowerShell 5-compatible request handling. Future reports include only the safe shell name (`pwsh` or `powershell.exe`).
+
+## 09B.28 Local evaluation transport convergence
+
+The evaluation-only PowerShell bridge now exercises a real no-network IPC dry-run: environment presence, stdin JSON parsing, endpoint construction, PowerShell execution, and a JSON transport envelope are verified before user consent. Stdout is reserved for the envelope and stderr for diagnostics. Shell startup/script failures remain execution errors and cannot become provider-blocked results. The next real run, still user-operated and not executed by Codex, writes `evaluation/reports/task09b-four-case-preflight-05.json`.

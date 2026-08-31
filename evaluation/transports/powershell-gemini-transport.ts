@@ -20,6 +20,7 @@ export type PowerShellGeminiFetcher = FetchLike & {
 
 export type PowerShellHost = 'pwsh' | 'powershell.exe';
 export type PowerShellTransportErrorCategory = 'shell_not_found' | 'shell_spawn_error' | 'powershell_script_error' | 'powershell_http_error' | 'powershell_timeout' | 'provider_http_error';
+type TransportOptions = { dryRun?: boolean; shell?: PowerShellHost };
 
 export class PowerShellTransportError extends Error {
   constructor(public readonly category: PowerShellTransportErrorCategory, message: string = category) {
@@ -36,11 +37,11 @@ export async function loadEvaluationModelEnvironment(): Promise<PowerShellGemini
   })) as PowerShellGeminiEnvironment;
 }
 
-export function createPowerShellGeminiFetcher(environment: PowerShellGeminiEnvironment): PowerShellGeminiFetcher {
+export function createPowerShellGeminiFetcher(environment: PowerShellGeminiEnvironment, options: TransportOptions = {}): PowerShellGeminiFetcher {
   let shell: PowerShellHost | undefined;
   let shellSelectionError: PowerShellTransportError | undefined;
   try {
-    shell = selectPowerShellHost(commandAvailable);
+    shell = options.shell ?? selectPowerShellHost(commandAvailable);
   } catch (error) {
     shellSelectionError = error instanceof PowerShellTransportError ? error : new PowerShellTransportError('shell_not_found');
   }
@@ -50,7 +51,7 @@ export function createPowerShellGeminiFetcher(environment: PowerShellGeminiEnvir
       fetcher.lastError = { category: shellSelectionError?.category ?? 'shell_not_found', latencyMs: 0 };
       throw shellSelectionError ?? new PowerShellTransportError('shell_not_found');
     }
-    const result = await runPowerShellAttempt(shell, environment, body, init?.signal ?? undefined);
+    const result = await runPowerShellAttempt(shell, environment, body, init?.signal ?? undefined, options.dryRun ?? false);
     if (result.status === null) {
       fetcher.lastError = { category: result.errorCategory ?? 'powershell_script_error', latencyMs: result.latencyMs };
       throw new PowerShellTransportError(fetcher.lastError.category);
@@ -78,12 +79,12 @@ function commandAvailable(command: PowerShellHost): boolean {
   }
 }
 
-async function runPowerShellAttempt(shell: PowerShellHost, environment: PowerShellGeminiEnvironment, body: string, signal?: AbortSignal): Promise<{ status: number | null; body: Buffer; latencyMs: number; retryAfterSeconds?: number; errorCategory?: PowerShellTransportErrorCategory }> {
+async function runPowerShellAttempt(shell: PowerShellHost, environment: PowerShellGeminiEnvironment, body: string, signal?: AbortSignal, dryRun = false): Promise<{ status: number | null; body: Buffer; latencyMs: number; retryAfterSeconds?: number; errorCategory?: PowerShellTransportErrorCategory }> {
   return new Promise((resolveAttempt) => {
     const started = Date.now();
     let child: ChildProcessWithoutNullStreams;
     try {
-      child = spawn(shell, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', resolve(process.cwd(), 'evaluation', 'transports', 'invoke-gemini.ps1')], {
+      child = spawn(shell, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', resolve(process.cwd(), 'evaluation', 'transports', 'invoke-gemini.ps1'), ...(dryRun ? ['-DryRun'] : [])], {
       env: { ...process.env, MODEL_API_KEY: environment.MODEL_API_KEY ?? '', MODEL_API_URL: environment.MODEL_API_URL ?? '', MODEL_NAME: environment.MODEL_NAME ?? '' },
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
@@ -110,7 +111,17 @@ async function runPowerShellAttempt(shell: PowerShellHost, environment: PowerShe
         resolveAttempt({ status: null, body: Buffer.alloc(0), latencyMs: Date.now() - started, errorCategory: errorCategory === 'powershell_timeout' ? 'powershell_timeout' : errorCategory === 'powershell_http_error' ? 'powershell_http_error' : 'powershell_script_error' });
         return;
       }
-      resolveAttempt({ status: Number(statusLine.slice(7)), body: Buffer.concat(stdout), latencyMs: Date.now() - started, retryAfterSeconds: retryLine ? parseRetryAfter(retryLine.slice(21)) : undefined });
+      const rawEnvelope = Buffer.concat(stdout).toString('utf8');
+      try {
+        const envelope = JSON.parse(rawEnvelope) as { ok?: unknown; status?: unknown; body?: unknown; category?: unknown };
+        if (envelope.ok !== true || typeof envelope.status !== 'number' || typeof envelope.body !== 'string') {
+          resolveAttempt({ status: null, body: Buffer.alloc(0), latencyMs: Date.now() - started, errorCategory: typeof envelope.category === 'string' && envelope.category === 'powershell_timeout' ? 'powershell_timeout' : 'powershell_script_error' });
+          return;
+        }
+        resolveAttempt({ status: envelope.status, body: Buffer.from(envelope.body, 'utf8'), latencyMs: Date.now() - started, retryAfterSeconds: retryLine ? parseRetryAfter(retryLine.slice(21)) : undefined });
+      } catch {
+        resolveAttempt({ status: null, body: Buffer.alloc(0), latencyMs: Date.now() - started, errorCategory: 'powershell_script_error' });
+      }
     });
     child.stdin.end(body);
   });

@@ -1,10 +1,6 @@
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { describe, expect, it } from 'vitest';
-import { selectPowerShellHost } from '../../evaluation/transports/powershell-gemini-transport';
+import { createPowerShellGeminiFetcher, selectPowerShellHost } from '../../evaluation/transports/powershell-gemini-transport';
 import { classifyAttempt } from '../../evaluation/runners/preflight-telemetry';
-
-const execFileAsync = promisify(execFile);
 
 describe('evaluation PowerShell transport host compatibility', () => {
   it('selects pwsh when available', () => {
@@ -25,8 +21,15 @@ describe('evaluation PowerShell transport host compatibility', () => {
   });
 
   it('starts the Windows PowerShell script in dry-run mode without network access', async () => {
-    const script = 'evaluation/transports/invoke-gemini.ps1';
-    const result = await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', script, '-DryRun'], { windowsHide: true });
-    expect(result.stderr).toContain('DRY_RUN=ok');
+    const fetcher = createPowerShellGeminiFetcher({ MODEL_API_KEY: 'test-only', MODEL_API_URL: 'https://example.invalid/v1beta/openai', MODEL_NAME: 'test-model' }, { dryRun: true, shell: 'powershell.exe' });
+    const response = await fetcher('https://example.invalid/transport-self-check', { method: 'POST', body: JSON.stringify({ check: 'transport' }) });
+    const result = await response.json() as { dryRun?: boolean; stdinJson?: boolean; requestConstructed?: boolean; environment?: Record<string, boolean> };
+    expect(response.status).toBe(200);
+    expect(result).toMatchObject({ dryRun: true, stdinJson: true, requestConstructed: true, environment: { MODEL_API_KEY: true, MODEL_API_URL: true, MODEL_NAME: true } });
+  });
+
+  it('maps a PowerShell dry-run script failure to powershell_script_error', async () => {
+    const fetcher = createPowerShellGeminiFetcher({ MODEL_API_KEY: 'test-only', MODEL_API_URL: 'https://example.invalid/v1beta/openai', MODEL_NAME: 'test-model' }, { dryRun: true, shell: 'powershell.exe' });
+    await expect(fetcher('https://example.invalid/transport-self-check', { method: 'POST', body: '{not-json' })).rejects.toMatchObject({ category: 'powershell_script_error' });
   });
 });

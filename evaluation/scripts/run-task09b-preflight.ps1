@@ -32,6 +32,8 @@ npm.cmd run worker:typecheck
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 npm.cmd run typecheck
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+npm.cmd exec vite-node -- evaluation/runners/transport-self-check.ts
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host ''
 Write-Host 'This command will send the four Sideglance evaluation fixtures to the configured Gemini API for local evaluation.'
@@ -44,7 +46,7 @@ if ($confirmation -cne 'YES') {
 
 npm.cmd exec vite-node -- evaluation/runners/task09b-four-case-preflight-03.ts
 $runnerExitCode = $LASTEXITCODE
-$reportPath = 'evaluation/reports/task09b-four-case-preflight-04.json'
+$reportPath = 'evaluation/reports/task09b-four-case-preflight-05.json'
 
 if (Test-Path -LiteralPath $reportPath -PathType Leaf) {
   $report = Get-Content -Raw -LiteralPath $reportPath | ConvertFrom-Json
