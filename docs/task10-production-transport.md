@@ -2,7 +2,7 @@
 
 Status: `IMPLEMENTED_LOCALLY` · `PENDING_CLOUDFLARE_CONFIGURATION` · `PENDING_DEPLOYMENT` · `PENDING_PRODUCTION_SMOKE`
 
-The Worker keeps fixture mode network-free. AI mode selects either the existing direct OpenAI-compatible transport (`MODEL_TRANSPORT=direct`) or the production Cloudflare REST transport (`MODEL_TRANSPORT=cloudflare_ai_gateway`). Both the Context Gate and Context Interpreter share one configured transport instance.
+The Worker keeps fixture mode network-free. AI mode selects either the existing direct OpenAI-compatible transport (`MODEL_TRANSPORT=direct`), the optional Unified Billing transport, or the production BYOK transport (`MODEL_TRANSPORT=cloudflare_ai_gateway_byok`). Both the Context Gate and Context Interpreter share one configured transport instance.
 
 ## Production request path
 
@@ -11,7 +11,7 @@ Browser
   ↓
 Cloudflare Worker
   ├─ Context Gate ─┐
-  └─ Interpreter ──┴─ POST https://api.cloudflare.com/client/v4/accounts/{account}/ai/v1/chat/completions
+  └─ Interpreter ──┴─ POST https://gateway.ai.cloudflare.com/v1/{account}/default/compat/chat/completions
                          model: google-ai-studio/{MODEL_NAME}
                          ↓
                     Google AI Studio / Gemini
@@ -21,22 +21,23 @@ Evidence reference resolution and deterministic grounding validation
 Decode response
 ```
 
-The Gateway transport uses the Cloudflare API token in the Worker-only `Authorization` header. It does not require `MODEL_API_KEY`; direct/evaluation use may continue to use that secret separately. The default Gateway REST endpoint is used; no gateway ID is required by this implementation.
+The BYOK transport uses the Worker-only `cf-aig-authorization: Bearer <CLOUDFLARE_AIG_TOKEN>` header for AI Gateway and `Authorization: Bearer <MODEL_API_KEY>` for the user-owned Google AI Studio credential. The `cf-aig-collect-log-payload: false` privacy header is sent. The default gateway is used; no gateway ID is required.
 
 ## Configuration (values are intentionally omitted)
 
 Non-secret Worker variables:
 
 - `CONTEXT_ENGINE_MODE=ai`
-- `MODEL_TRANSPORT=cloudflare_ai_gateway`
+- `MODEL_TRANSPORT=cloudflare_ai_gateway_byok`
 - `MODEL_NAME=<approved production model>`
 - `CLOUDFLARE_ACCOUNT_ID=<account id>` (the operator stores this as a Worker secret so account metadata is not committed)
 
 Worker secret:
 
-- `CLOUDFLARE_API_TOKEN` — Cloudflare API token with `Account → Workers AI → Read` permission for the inference REST endpoint. AI Gateway management permissions are not required by this implementation.
+- `CLOUDFLARE_AIG_TOKEN` — authenticated AI Gateway token created from the Cloudflare AI Gateway dashboard.
+- `MODEL_API_KEY` — the user-owned Google AI Studio API key.
 
-Do not use `VITE_` for the token, put it in tracked files, or log it. Confirm sufficient Cloudflare Unified Billing / AI Gateway credits before production use. Future setup is documented in `docs/task10-production-setup.md`; this task performs none of those remote actions.
+Do not use `VITE_` for either credential, put them in tracked files, or log them. Cloudflare Unified Billing credits and a payment method are not required for the current BYOK route. Future setup is documented in `docs/task10-production-setup.md`; this task performs none of those remote actions.
 
 ## Reliability and safety
 

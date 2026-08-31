@@ -16,6 +16,7 @@ export type WorkerEnv = {
   MODEL_TRANSPORT?: string;
   CLOUDFLARE_ACCOUNT_ID?: string;
   CLOUDFLARE_API_TOKEN?: string;
+  CLOUDFLARE_AIG_TOKEN?: string;
 };
 
 const DECODE_TIMEOUT_MS = 65_000;
@@ -78,9 +79,10 @@ function createContextEngine(env: WorkerEnv, transport?: ModelTransport): Contex
 }
 
 function createTransport(env: WorkerEnv): ModelTransport | undefined {
-  const mode = env.MODEL_TRANSPORT === 'cloudflare_ai_gateway' ? 'cloudflare_ai_gateway' : 'direct';
+  const mode = env.MODEL_TRANSPORT === 'cloudflare_ai_gateway_byok' ? 'cloudflare_ai_gateway_byok' : env.MODEL_TRANSPORT === 'cloudflare_ai_gateway' ? 'cloudflare_ai_gateway' : 'direct';
+  if (env.MODEL_TRANSPORT && !['direct', 'cloudflare_ai_gateway', 'cloudflare_ai_gateway_byok'].includes(env.MODEL_TRANSPORT)) throw new ModelTransportError('transport_error', 'Invalid model transport mode.');
   if (mode === 'direct' && !env.MODEL_API_KEY) return undefined;
-  return createModelTransport({ mode, apiKey: env.MODEL_API_KEY, endpoint: env.MODEL_API_URL, model: env.MODEL_NAME, accountId: env.CLOUDFLARE_ACCOUNT_ID, cloudflareToken: env.CLOUDFLARE_API_TOKEN });
+  return createModelTransport({ mode, apiKey: env.MODEL_API_KEY, endpoint: env.MODEL_API_URL, model: env.MODEL_NAME, accountId: env.CLOUDFLARE_ACCOUNT_ID, cloudflareToken: env.CLOUDFLARE_API_TOKEN, cloudflareAigToken: env.CLOUDFLARE_AIG_TOKEN });
 }
 
 async function withDecodeBudget<T>(promise: Promise<T>): Promise<T> {

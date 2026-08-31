@@ -1,4 +1,4 @@
-export type ModelTransportMode = 'direct' | 'cloudflare_ai_gateway';
+export type ModelTransportMode = 'direct' | 'cloudflare_ai_gateway' | 'cloudflare_ai_gateway_byok';
 export type ModelTransportFailure = 'gateway_auth_error' | 'gateway_rate_limited' | 'gateway_provider_unavailable' | 'gateway_timeout' | 'gateway_invalid_request' | 'transport_error';
 
 export type ModelMessage = { role: 'system' | 'user' | 'assistant'; content: string };
@@ -13,6 +13,11 @@ export class ModelTransportError extends Error {
   }
 }
 
+export type ModelTransportConfigErrorCode = 'missing_model_config' | 'missing_gateway_account' | 'missing_gateway_token' | 'missing_google_key' | 'invalid_transport_mode';
+export class ModelTransportConfigError extends ModelTransportError {
+  constructor(public readonly configCode: ModelTransportConfigErrorCode, message: string) { super('transport_error', message); this.name = 'ModelTransportConfigError'; }
+}
+
 export type ModelTransportConfig = {
   mode: ModelTransportMode;
   model?: string;
@@ -20,6 +25,7 @@ export type ModelTransportConfig = {
   endpoint?: string;
   accountId?: string;
   cloudflareToken?: string;
+  cloudflareAigToken?: string;
   timeoutMs?: number;
   fetcher?: FetchLike;
   retryBackoffMs?: number;
@@ -30,12 +36,19 @@ const MAX_ATTEMPTS = 2;
 const GATEWAY_ENDPOINT = 'https://api.cloudflare.com/client/v4/accounts';
 
 export function createModelTransport(config: ModelTransportConfig): ModelTransport {
+  if (config.mode !== 'direct' && !config.model) throw new ModelTransportConfigError('missing_model_config', 'Model name is not configured.');
+  if (config.mode === 'cloudflare_ai_gateway_byok') {
+    if (!config.accountId) throw new ModelTransportConfigError('missing_gateway_account', 'Cloudflare account ID is not configured.');
+    if (!config.cloudflareAigToken) throw new ModelTransportConfigError('missing_gateway_token', 'Cloudflare AI Gateway token is not configured.');
+    if (!config.apiKey) throw new ModelTransportConfigError('missing_google_key', 'Google AI Studio API key is not configured.');
+    return new CloudflareAIGatewayByokTransport(config);
+  }
   if (config.mode === 'cloudflare_ai_gateway') {
-    if (!config.accountId) throw new ModelTransportError('gateway_invalid_request', 'Cloudflare account ID is not configured.');
-    if (!config.cloudflareToken) throw new ModelTransportError('gateway_auth_error', 'Cloudflare API token is not configured.');
+    if (!config.accountId) throw new ModelTransportConfigError('missing_gateway_account', 'Cloudflare account ID is not configured.');
+    if (!config.cloudflareToken) throw new ModelTransportConfigError('missing_gateway_token', 'Cloudflare API token is not configured.');
     return new CloudflareAIGatewayTransport(config);
   }
-  if (!config.apiKey) throw new ModelTransportError('gateway_auth_error', 'Model API key is not configured.');
+  if (!config.apiKey) throw new ModelTransportConfigError('missing_google_key', 'Model API key is not configured.');
   return new DirectModelTransport(config);
 }
 
@@ -43,7 +56,7 @@ export class DirectModelTransport implements ModelTransport {
   private readonly fetcher: FetchLike;
   constructor(private readonly config: ModelTransportConfig) { this.fetcher = config.fetcher ?? defaultFetch; }
   chat(request: ModelChatRequest): Promise<Response> {
-    return requestWithRetry(this.fetcher, resolveChatEndpoint(this.config.endpoint ?? 'https://api.openai.com/v1/chat/completions'), request, `Bearer ${this.config.apiKey}`, this.config, 'direct');
+    return requestWithRetry(this.fetcher, resolveChatEndpoint(this.config.endpoint ?? 'https://api.openai.com/v1/chat/completions'), request, { authorization: `Bearer ${this.config.apiKey}`, 'content-type': 'application/json' }, this.config, 'direct');
   }
 }
 
@@ -52,11 +65,20 @@ export class CloudflareAIGatewayTransport implements ModelTransport {
   constructor(private readonly config: ModelTransportConfig) { this.fetcher = config.fetcher ?? defaultFetch; }
   chat(request: ModelChatRequest): Promise<Response> {
     const url = `${GATEWAY_ENDPOINT}/${encodeURIComponent(this.config.accountId!)}/ai/v1/chat/completions`;
-    return requestWithRetry(this.fetcher, url, { ...request, model: `google-ai-studio/${request.model}` }, `Bearer ${this.config.cloudflareToken}`, this.config, 'gateway');
+    return requestWithRetry(this.fetcher, url, { ...request, model: `google-ai-studio/${request.model}` }, { authorization: `Bearer ${this.config.cloudflareToken}`, 'content-type': 'application/json' }, this.config, 'gateway');
   }
 }
 
-async function requestWithRetry(fetcher: FetchLike, url: string, request: ModelChatRequest, authorization: string, config: ModelTransportConfig, mode: 'direct' | 'gateway'): Promise<Response> {
+export class CloudflareAIGatewayByokTransport implements ModelTransport {
+  private readonly fetcher: FetchLike;
+  constructor(private readonly config: ModelTransportConfig) { this.fetcher = config.fetcher ?? defaultFetch; }
+  chat(request: ModelChatRequest): Promise<Response> {
+    const url = `${GATEWAY_ENDPOINT.replace('/client/v4/accounts', '').replace('https://api.cloudflare.com', 'https://gateway.ai.cloudflare.com/v1')}/${encodeURIComponent(this.config.accountId!)}/default/compat/chat/completions`;
+    return requestWithRetry(this.fetcher, url, { ...request, model: `google-ai-studio/${request.model}` }, { authorization: `Bearer ${this.config.apiKey}`, 'cf-aig-authorization': `Bearer ${this.config.cloudflareAigToken}`, 'cf-aig-collect-log-payload': 'false', 'content-type': 'application/json' }, this.config, 'gateway');
+  }
+}
+
+async function requestWithRetry(fetcher: FetchLike, url: string, request: ModelChatRequest, headers: Record<string, string>, config: ModelTransportConfig, mode: 'direct' | 'gateway'): Promise<Response> {
   const deadline = Date.now() + (config.timeoutMs ?? DEFAULT_TIMEOUT_MS);
   let lastError: ModelTransportError | undefined;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
@@ -64,7 +86,7 @@ async function requestWithRetry(fetcher: FetchLike, url: string, request: ModelC
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), remaining);
     try {
-      const response = await fetcher(url, { method: 'POST', headers: { 'content-type': 'application/json', authorization }, body: JSON.stringify(request), signal: controller.signal });
+      const response = await fetcher(url, { method: 'POST', headers, body: JSON.stringify(request), signal: controller.signal });
       if (!response.ok) {
         const providerMessage = await response.clone().text().catch(() => '');
         const error = new ModelTransportError(classifyStatus(response.status), safeProviderMessage(providerMessage), response.status, safeProviderMessage(providerMessage));

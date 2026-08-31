@@ -10,13 +10,14 @@ const smoke = read('scripts/run-production-smoke.ps1');
 describe('production operator safeguards', () => {
   it('discovers one account locally and never accepts a token argument', () => {
     expect(configure).toContain("[regex]::Matches($whoami");
-    expect(configure).toContain('secret put CLOUDFLARE_API_TOKEN');
+    expect(configure).toContain('secret put CLOUDFLARE_AIG_TOKEN');
     expect(configure).not.toMatch(/param\s*\([^)]*token/i);
     expect(configure).not.toMatch(/CLOUDFLARE_API_TOKEN\s*=\s*['\"]/i);
   });
-  it('documents the Workers AI Read permission and billing confirmation', () => {
-    expect(read('docs/task10-production-setup.md')).toContain('Workers AI → Read');
-    expect(configure).toContain('Unified Billing / AI Gateway credits');
+  it('documents the AI Gateway token path without a billing requirement', () => {
+    expect(read('docs/task10-production-setup.md')).toContain('AI Gateway token');
+    expect(read('docs/task10-production-setup.md')).toContain('No Cloudflare credits');
+    expect(configure).toContain('AI Gateway token');
   });
   it('requires exact DEPLOY before invoking Wrangler deploy', () => {
     expect(deploy).toContain("$confirmation -cne 'DEPLOY'");
@@ -37,7 +38,7 @@ describe('production operator safeguards', () => {
   });
   it('blocks readiness until account and runtime secrets are configured', () => {
     expect(readiness).toContain('Cloudflare account ID is not configured');
-    expect(readiness).toContain('CLOUDFLARE_API_TOKEN is not configured');
+    expect(readiness).toContain('CLOUDFLARE_AIG_TOKEN is not configured');
     expect(readiness).toContain('CLOUDFLARE_ACCOUNT_ID is not configured');
   });
 });
