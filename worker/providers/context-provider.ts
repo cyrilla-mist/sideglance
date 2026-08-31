@@ -5,6 +5,7 @@ import { buildEvidenceCatalog } from '../../shared/context/evidence-catalog';
 import { resolveContextEvidence } from '../../shared/context/evidence-resolver';
 import { assertModelContextAnalysis } from '../../shared/schemas/model-context';
 import { buildContextAnalysisPrompt } from '../prompts/context-analysis';
+import { createModelTransport, ModelTransportError, type ModelTransport, type FetchLike as TransportFetchLike } from './model-transport';
 
 export type ContextProviderErrorCode = 'context_timeout' | 'context_invalid_json' | 'context_schema_invalid' | 'invalid_evidence_reference' | 'hallucinated_evidence' | 'missing_api_key' | 'model_unavailable';
 export type ContextProviderFailureStage = 'env_loading' | 'request_construction' | 'fetch_error' | 'timeout' | 'http_error' | 'api_envelope_error' | 'missing_content' | 'model_json_error' | 'model_context_schema_error' | 'context_schema_error' | 'evidence_reference_error' | 'evidence_grounding_error';
@@ -41,9 +42,7 @@ export interface ContextModelProvider {
   analyzeContext(input: string, additionalContext?: string): Promise<ContextAnalysis>;
 }
 
-export type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
-
-const DEFAULT_PROVIDER_TIMEOUT_MS = 30_000;
+export type FetchLike = TransportFetchLike;
 
 export type ContextModelProviderConfig = {
   apiKey?: string;
@@ -52,6 +51,7 @@ export type ContextModelProviderConfig = {
   timeoutMs?: number;
   fetcher?: FetchLike;
   responseFormat?: boolean;
+  transport?: ModelTransport;
 };
 
 type ModelResponse = {
@@ -61,10 +61,10 @@ type ModelResponse = {
 type ProviderContentResult = ContextProviderDiagnostics & { content: string };
 
 export class ModelContextProvider implements ContextModelProvider {
-  private readonly fetcher: FetchLike;
+  private readonly transport?: ModelTransport;
 
   constructor(private readonly config: ContextModelProviderConfig) {
-    this.fetcher = config.fetcher ?? defaultFetch;
+    this.transport = config.transport ?? (config.apiKey ? createModelTransport({ mode: 'direct', apiKey: config.apiKey, endpoint: config.endpoint, model: config.model, timeoutMs: config.timeoutMs, fetcher: config.fetcher }) : undefined);
   }
 
   async diagnoseMinimal(): Promise<ContextProviderDiagnostics> {
@@ -80,13 +80,11 @@ export class ModelContextProvider implements ContextModelProvider {
   }
 
   async analyzeContext(input: string, additionalContext?: string): Promise<ContextAnalysis> {
-    if (!this.config.apiKey) throw new ContextProviderError('missing_api_key', 'Context model API key is not configured.');
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), this.config.timeoutMs ?? DEFAULT_PROVIDER_TIMEOUT_MS);
+    if (!this.config.apiKey && !this.config.transport) throw new ContextProviderError('missing_api_key', 'Context model API key is not configured.');
     try {
       const evidenceCatalog = buildEvidenceCatalog(input, additionalContext);
       const prompt = buildContextAnalysisPrompt(input, additionalContext, evidenceCatalog);
-      const result = await this.requestContent(prompt.system, prompt.user, this.config.responseFormat !== false, controller.signal);
+      const result = await this.requestContent(prompt.system, prompt.user, this.config.responseFormat !== false);
       let parsed: unknown;
       try { parsed = JSON.parse(result.content) as unknown; } catch { throw new ContextProviderError('context_invalid_json', 'Context model returned invalid JSON.', { ...result, stage: 'model_json_error' }); }
       let modelAnalysis;
@@ -101,32 +99,21 @@ export class ModelContextProvider implements ContextModelProvider {
     } catch (error) {
       if (error instanceof ContextProviderError) throw error;
       throw new ContextProviderError('model_unavailable', 'Context model is unavailable.', { stage: 'request_construction', status: null, contentType: null, elapsedMs: 0, assistantContentReached: false, envelopeParsed: false });
-    } finally {
-      clearTimeout(timeout);
     }
   }
 
-  private async requestContent(system: string, user: string, includeResponseFormat: boolean, providedSignal?: AbortSignal): Promise<ProviderContentResult> {
-    if (!this.config.apiKey) throw new ContextProviderError('missing_api_key', 'Context model API key is not configured.', { stage: 'env_loading', status: null, contentType: null, elapsedMs: 0, assistantContentReached: false, envelopeParsed: false });
+  private async requestContent(system: string, user: string, includeResponseFormat: boolean): Promise<ProviderContentResult> {
+    if (!this.config.apiKey && !this.config.transport) throw new ContextProviderError('missing_api_key', 'Context model API key is not configured.', { stage: 'env_loading', status: null, contentType: null, elapsedMs: 0, assistantContentReached: false, envelopeParsed: false });
     const started = Date.now();
-    const controller = providedSignal ? undefined : new AbortController();
-    const signal = providedSignal ?? controller!.signal;
-    const timeout = controller ? setTimeout(() => controller.abort(), this.config.timeoutMs ?? DEFAULT_PROVIDER_TIMEOUT_MS) : undefined;
-    const baseDiagnostics = (stage: ContextProviderDiagnostics['stage'], status: number | null, contentType: string | null, extra: Partial<ContextProviderDiagnostics> = {}): ContextProviderDiagnostics => ({ stage, status, contentType, elapsedMs: Date.now() - started, assistantContentReached: false, envelopeParsed: false, aborted: false, signalAborted: signal.aborted, ...extra });
+    const baseDiagnostics = (stage: ContextProviderDiagnostics['stage'], status: number | null, contentType: string | null, extra: Partial<ContextProviderDiagnostics> = {}): ContextProviderDiagnostics => ({ stage, status, contentType, elapsedMs: Date.now() - started, assistantContentReached: false, envelopeParsed: false, aborted: false, signalAborted: false, ...extra });
     try {
-      const requestUrl = resolveChatCompletionsEndpoint(this.config.endpoint ?? 'https://api.openai.com/v1/chat/completions');
       const requestBody = {
         model: this.config.model ?? 'gpt-4o-mini',
         temperature: 0,
         ...(includeResponseFormat ? { response_format: { type: 'json_object' as const } } : {}),
-        messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+        messages: [{ role: 'system' as const, content: system }, { role: 'user' as const, content: user }],
       };
-      const response = await this.fetcher(requestUrl, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', authorization: `Bearer ${this.config.apiKey}` },
-        body: JSON.stringify(requestBody),
-        signal,
-      });
+      const response = await this.transport!.chat(requestBody);
       const contentType = response.headers.get('content-type');
       if (!response.ok) {
         const responseText = await response.text().catch(() => '');
@@ -139,22 +126,15 @@ export class ModelContextProvider implements ContextModelProvider {
       return { ...baseDiagnostics('response_received', response.status, contentType, { envelopeParsed: true, assistantContentReached: true }), content };
     } catch (error) {
       if (error instanceof ContextProviderError) throw error;
-      const exception = describeFetchError(error, signal.aborted);
+      if (error instanceof ModelTransportError) {
+        if (error.category === 'gateway_timeout') throw new ContextProviderError('context_timeout', 'Context model request timed out.', baseDiagnostics('timeout', error.status ?? null, null, { errorName: error.name, errorMessage: error.message, providerMessage: error.providerMessage }));
+        throw new ContextProviderError('model_unavailable', 'Context model is unavailable.', baseDiagnostics('http_error', error.status ?? null, null, { errorName: error.name, errorMessage: error.message, providerMessage: error.providerMessage }));
+      }
+      const exception = describeFetchError(error, false);
       if (exception.aborted) throw new ContextProviderError('context_timeout', 'Context model request timed out.', baseDiagnostics('timeout', null, null, exception));
       throw new ContextProviderError('model_unavailable', 'Context model is unavailable.', baseDiagnostics('fetch_error', null, null, exception));
-    } finally {
-      if (timeout) clearTimeout(timeout);
     }
   }
-}
-
-const defaultFetch: FetchLike = (input, init) => globalThis.fetch(input, init);
-
-function resolveChatCompletionsEndpoint(endpoint: string): string {
-  const url = new URL(endpoint);
-  if (url.pathname.endsWith('/chat/completions')) return url.toString();
-  url.pathname = `${url.pathname.replace(/\/$/, '')}/chat/completions`;
-  return url.toString();
 }
 
 function extractContent(payload: unknown): string {

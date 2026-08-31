@@ -6,39 +6,51 @@ import type { ContextEngine } from '../engine/context-engine';
 import { AIContextEngine, MockContextEngine } from '../engine/context-engine';
 import { ContextProviderError, ModelContextProvider } from '../providers/context-provider';
 import { AIContextGateEngine, ContextGateError, MockContextGateEngine } from '../engine/context-gate';
+import { createModelTransport, ModelTransportError, type ModelTransport } from '../providers/model-transport';
 
 export type WorkerEnv = {
   CONTEXT_ENGINE_MODE?: string;
   MODEL_API_KEY?: string;
   MODEL_API_URL?: string;
   MODEL_NAME?: string;
+  MODEL_TRANSPORT?: string;
+  CLOUDFLARE_ACCOUNT_ID?: string;
+  CLOUDFLARE_API_TOKEN?: string;
 };
+
+const DECODE_TIMEOUT_MS = 65_000;
+const MAX_INPUT_LENGTH = 4_000;
+const MAX_CONTEXT_LENGTH = 12_000;
 
 export async function handleDecode(request: Request, env: WorkerEnv = {}): Promise<Response> {
   let body: unknown;
   try { body = await request.json(); } catch { return json({ type: 'failed', errorCode: 'invalid_request', message: 'Request body must be valid JSON.' }, 400); }
   try {
     const request = parseDecodeRequest(body);
+    if (request.inputText.length > MAX_INPUT_LENGTH) throw new Error('inputText exceeds the maximum length.');
+    if (request.additionalContext && request.additionalContext.length > MAX_CONTEXT_LENGTH) throw new Error('additionalContext exceeds the maximum length.');
+    const transport = env.CONTEXT_ENGINE_MODE === 'ai' ? createTransport(env) : undefined;
     const gateEngine = env.CONTEXT_ENGINE_MODE === 'ai'
-      ? new AIContextGateEngine({ apiKey: env.MODEL_API_KEY, endpoint: env.MODEL_API_URL, model: env.MODEL_NAME })
+      ? new AIContextGateEngine({ apiKey: env.MODEL_API_KEY, endpoint: env.MODEL_API_URL, model: env.MODEL_NAME, transport })
       : new MockContextGateEngine();
-    const gateResult = await gateEngine.checkContext(request.inputText, request.additionalContext);
+    const gateResult = await withDecodeBudget(gateEngine.checkContext(request.inputText, request.additionalContext));
     if (gateResult.status === 'needs_context') {
       return json({ type: 'needs_context', originalMoment: request.inputText, reason: 'ambiguous_phrase', question: gateResult.question ?? 'What was said immediately before this?', missingContext: gateResult.missingInformation ?? 'The meaning is ambiguous without the surrounding exchange.' }, 200);
     }
-    const contextEngine = createContextEngine(env);
+    const contextEngine = createContextEngine(env, transport);
     if (env.CONTEXT_ENGINE_MODE === 'ai') {
-      const contextAnalysis = await contextEngine.analyze(request.inputText, request.additionalContext);
+      const contextAnalysis = await withDecodeBudget(contextEngine.analyze(request.inputText, request.additionalContext));
       if (!contextAnalysis) throw new Error('AI context engine returned no analysis.');
       return json(toDecodedResponse(request.inputText, contextAnalysis), 200);
     }
-    const contextAnalysis = await contextEngine.analyze(request.inputText, request.additionalContext);
+    const contextAnalysis = await withDecodeBudget(contextEngine.analyze(request.inputText, request.additionalContext));
     const decoded = assertDecodeResponse(new FixtureProvider().decode(request));
     if (decoded.type !== 'decoded') return json(decoded, 200);
     return json(assertDecodeResponse(contextAnalysis ? { ...decoded, contextAnalysis } : decoded), 200);
   } catch (error) {
     if (error instanceof ContextProviderError) return json({ type: 'failed', errorCode: error.code === 'hallucinated_evidence' || error.code === 'invalid_evidence_reference' ? 'model_unavailable' : error.code, message: error.code === 'hallucinated_evidence' || error.code === 'invalid_evidence_reference' ? 'We could not verify the model explanation.' : error.message }, 502);
     if (error instanceof ContextGateError) return json({ type: 'failed', errorCode: contextGateErrorCode(error), message: error.stage === 'missing_api_key' ? 'Context model API key is not configured.' : 'Context gate is unavailable.' }, 502);
+    if (error instanceof ModelTransportError) return json({ type: 'failed', errorCode: 'model_unavailable', message: 'Context model is unavailable.' }, 502);
     return json({ type: 'failed', errorCode: 'invalid_request', message: error instanceof Error ? error.message : 'Invalid decode request.' }, 400);
   }
 }
@@ -53,15 +65,29 @@ function contextGateErrorCode(error: ContextGateError): 'context_timeout' | 'con
 
 function json(value: DecodeResponse, status: number): Response { return Response.json(value, { status }); }
 
-function createContextEngine(env: WorkerEnv): ContextEngine {
+function createContextEngine(env: WorkerEnv, transport?: ModelTransport): ContextEngine {
   if (env.CONTEXT_ENGINE_MODE === 'ai') {
     return new AIContextEngine(new ModelContextProvider({
       apiKey: env.MODEL_API_KEY,
       endpoint: env.MODEL_API_URL,
       model: env.MODEL_NAME,
+      transport,
     }));
   }
   return new MockContextEngine();
+}
+
+function createTransport(env: WorkerEnv): ModelTransport | undefined {
+  const mode = env.MODEL_TRANSPORT === 'cloudflare_ai_gateway' ? 'cloudflare_ai_gateway' : 'direct';
+  if (mode === 'direct' && !env.MODEL_API_KEY) return undefined;
+  return createModelTransport({ mode, apiKey: env.MODEL_API_KEY, endpoint: env.MODEL_API_URL, model: env.MODEL_NAME, accountId: env.CLOUDFLARE_ACCOUNT_ID, cloudflareToken: env.CLOUDFLARE_API_TOKEN });
+}
+
+async function withDecodeBudget<T>(promise: Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([promise, new Promise<T>((_, reject) => { timer = setTimeout(() => reject(new ContextGateError('timeout', 'Decode request timed out.')), DECODE_TIMEOUT_MS); })]);
+  } finally { if (timer) clearTimeout(timer); }
 }
 
 function toDecodedResponse(originalMoment: string, analysis: ContextAnalysis): DecodeResponse {

@@ -2,6 +2,7 @@ import type { ContextGateResult, ContextSufficiency } from '../../shared/contrac
 import { assertContextGateResult, diagnoseContextGateResult, type ContextGateIssue } from '../../shared/schemas/context-gate';
 import type { FetchLike } from '../providers/context-provider';
 import { contextGateResponseFormat } from '../../shared/schemas/context-gate-json';
+import { createModelTransport, ModelTransportError, type ModelTransport } from '../providers/model-transport';
 
 export interface ContextGateEngine {
   checkContext(input: string, additionalContext?: string): Promise<ContextGateResult>;
@@ -20,7 +21,7 @@ export class MockContextGateEngine implements ContextGateEngine {
   }
 }
 
-export type AIContextGateConfig = { apiKey?: string; endpoint?: string; model?: string; fetcher?: FetchLike; timeoutMs?: number; reasoningEffort?: 'low' | 'medium' | 'high' };
+export type AIContextGateConfig = { apiKey?: string; endpoint?: string; model?: string; fetcher?: FetchLike; transport?: ModelTransport; timeoutMs?: number; reasoningEffort?: 'low' | 'medium' | 'high' };
 
 export class ContextGateError extends Error {
   constructor(public readonly stage: 'missing_api_key' | 'transport' | 'http_error' | 'invalid_json' | 'invalid_contract' | 'timeout', message: string, public readonly status?: number, public readonly issues?: ContextGateIssue[], public readonly providerMessage?: string) {
@@ -30,28 +31,21 @@ export class ContextGateError extends Error {
 }
 
 export class AIContextGateEngine implements ContextGateEngine {
-  private readonly fetcher: FetchLike;
+  private readonly transport?: ModelTransport;
 
   constructor(private readonly config: AIContextGateConfig) {
-    this.fetcher = config.fetcher ?? ((input, init) => globalThis.fetch(input, init));
+    this.transport = config.transport ?? (config.apiKey ? createModelTransport({ mode: 'direct', apiKey: config.apiKey, endpoint: config.endpoint, model: config.model, timeoutMs: config.timeoutMs, fetcher: config.fetcher }) : undefined);
   }
 
   async checkContext(input: string, additionalContext?: string): Promise<ContextGateResult> {
-    if (!this.config.apiKey) throw new ContextGateError('missing_api_key', 'Context gate API key is not configured.');
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), this.config.timeoutMs ?? 30_000);
+    if (!this.config.apiKey && !this.config.transport) throw new ContextGateError('missing_api_key', 'Context gate API key is not configured.');
     try {
-      const response = await this.fetcher(resolveEndpoint(this.config.endpoint ?? 'https://api.openai.com/v1/chat/completions'), {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', authorization: `Bearer ${this.config.apiKey}` },
-        body: JSON.stringify({
+      const response = await this.transport!.chat({
           model: this.config.model ?? 'gpt-4o-mini',
           temperature: 0,
           ...(this.config.reasoningEffort ? { reasoning_effort: this.config.reasoningEffort } : {}),
           response_format: contextGateResponseFormat,
           messages: [{ role: 'system', content: gateSystemPrompt }, { role: 'user', content: `Assess whether this input has enough context for a reliable interpretation.\nInput:\n${input}${additionalContext?.trim() ? `\nAdditional context:\n${additionalContext.trim()}` : ''}` }],
-        }),
-        signal: controller.signal,
       });
       if (!response.ok) {
         const responseText = await response.text().catch(() => '');
@@ -65,10 +59,11 @@ export class AIContextGateEngine implements ContextGateEngine {
       try { return assertContextGateResult(parsed); } catch { throw new ContextGateError('invalid_contract', 'Context gate returned an invalid contract.', undefined, diagnoseContextGateResult(parsed).issues); }
     } catch (error) {
       if (error instanceof ContextGateError) throw error;
-      if (controller.signal.aborted) throw new ContextGateError('timeout', 'Context gate request timed out.');
+      if (error instanceof ModelTransportError) {
+        if (error.category === 'gateway_timeout') throw new ContextGateError('timeout', 'Context gate request timed out.');
+        throw new ContextGateError('http_error', 'Context gate provider returned an HTTP error.', error.status, undefined, error.providerMessage);
+      }
       throw new ContextGateError('transport', 'Context gate request failed.');
-    } finally {
-      clearTimeout(timeout);
     }
   }
 }
@@ -83,13 +78,6 @@ sufficiency: object with boolean toneJudgment, socialImplication, usageBoundary
 If status is ready, omit missingInformation and question entirely.
 If status is needs_context, include non-empty missingInformation and exactly one specific question ending with one question mark.
 Do not output a full interpretation, sarcasm verdict, social essay, or demographic/identity inference.`;
-
-function resolveEndpoint(endpoint: string): string {
-  const url = new URL(endpoint);
-  if (url.pathname.endsWith('/chat/completions')) return url.toString();
-  url.pathname = `${url.pathname.replace(/\/$/, '')}/chat/completions`;
-  return url.toString();
-}
 
 function safeProviderMessage(responseText: string): string {
   try {

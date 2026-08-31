@@ -2,6 +2,10 @@ name = "sideglance-worker"
 main = "worker/index.ts"
 compatibility_date = "2026-08-21"
 
+[env.production.vars]
+MODEL_TRANSPORT = "cloudflare_ai_gateway"
+MODEL_NAME = "gemini-3.7-flash"
+
 [dev]
 ip = "127.0.0.1"
 port = 8787

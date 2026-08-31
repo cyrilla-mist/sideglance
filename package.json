@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "worker:dev": "wrangler dev worker/index.ts --local --ip 127.0.0.1 --port 8787",
-    "worker:typecheck": "tsc -p worker/tsconfig.json --noEmit"
+    "worker:typecheck": "tsc -p worker/tsconfig.json --noEmit",
+    "production:readiness": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-production-readiness.ps1"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260820.1",
