@@ -136,7 +136,7 @@ function stageOf(error: unknown): string { return error instanceof ContextGateEr
 function isRetryable(error: unknown, fetcher: PowerShellGeminiFetcher): boolean { const status = statusOf(error, fetcher); return ['timeout', 'fetch_error', 'transport'].includes(stageOf(error)) || [429, 500, 502, 503, 504].includes(status ?? -1); }
 function isAuthenticationFailure(error: unknown, fetcher: PowerShellGeminiFetcher): boolean { return [401, 403].includes(statusOf(error, fetcher) ?? -1); }
 function isSchemaIncompatibility(error: unknown, stage: Stage, fetcher: PowerShellGeminiFetcher): boolean { return stage === 'gate' && statusOf(error, fetcher) === 400; }
-function isExecutionTransportFailure(fetcher: PowerShellGeminiFetcher): boolean { return ['shell_not_found', 'shell_spawn_error', 'powershell_script_error'].includes(fetcher.lastError?.category ?? ''); }
+function isExecutionTransportFailure(fetcher: PowerShellGeminiFetcher): boolean { return ['shell_not_found', 'shell_spawn_error', 'powershell_script_error', 'script_parse_error', 'stdin_parse_error', 'request_serialization_error', 'response_parse_error', 'child_timeout'].includes(fetcher.lastError?.category ?? ''); }
 
 async function main(): Promise<void> {
   const environment = await loadEvaluationModelEnvironment();
@@ -149,10 +149,10 @@ async function main(): Promise<void> {
   for (const remaining of cases.slice(results.length)) results.push({ case: remaining.id, model, verdict: 'NOT_RUN', note: 'Stopped after provider-wide blocker.' });
   const overall = results.some((r) => r.verdict === 'GATE_JSON_SCHEMA_PROVIDER_INCOMPATIBILITY') ? 'GATE_JSON_SCHEMA_PROVIDER_INCOMPATIBILITY' : results.some((r) => r.verdict === 'EXECUTION_TRANSPORT_ERROR') ? 'EXECUTION_TRANSPORT_ERROR' : results.some((r) => r.providerBlocked) ? 'PROVIDER_BLOCKED' : results.length === cases.length && results.every((r) => r.verdict === 'PASS') ? 'PASS' : 'FAIL';
   const structuredAcceptance = results.some((r) => r.structuredGateProviderAcceptance === 'rejected') ? 'rejected' : results.some((r) => r.structuredGateProviderAcceptance === 'verified') ? 'verified' : 'unverified';
-  const report = { runId: 'task09b-four-case-preflight-05', transport: 'evaluation-only PowerShell bridge', productionWorkerPathUsed: false, model, reasoningEffort, casesRequested: 4, casesRun: results.filter((r) => r.verdict !== 'NOT_RUN').length, results, hardFailures: results.filter((r) => r.hardFailure).map((r) => r.hardFailure), providerBlockedCases: results.filter((r) => r.providerBlocked).map((r) => r.case), structuredGateProviderAcceptance: structuredAcceptance, structuredGateProviderAccepted: structuredAcceptance === 'verified', overallVerdict: overall };
+  const report = { runId: 'task09b-four-case-preflight-06', transport: 'evaluation-only PowerShell bridge', productionWorkerPathUsed: false, model, reasoningEffort, casesRequested: 4, casesRun: results.filter((r) => r.verdict !== 'NOT_RUN').length, results, hardFailures: results.filter((r) => r.hardFailure).map((r) => r.hardFailure), providerBlockedCases: results.filter((r) => r.providerBlocked).map((r) => r.case), structuredGateProviderAcceptance: structuredAcceptance, structuredGateProviderAccepted: structuredAcceptance === 'verified', overallVerdict: overall };
   const integrityErrors = validatePreflightReport(report as unknown as Record<string, unknown>);
   if (integrityErrors.length > 0) throw new Error(`Preflight report integrity failure: ${integrityErrors.join(', ')}`);
-  const path = resolve(process.cwd(), 'evaluation', 'reports', 'task09b-four-case-preflight-05.json');
+  const path = resolve(process.cwd(), 'evaluation', 'reports', 'task09b-four-case-preflight-06.json');
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, JSON.stringify(report, null, 2), 'utf8');
   console.log(JSON.stringify({ runId: report.runId, casesRun: report.casesRun, overallVerdict: report.overallVerdict }));

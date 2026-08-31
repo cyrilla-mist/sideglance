@@ -19,7 +19,7 @@ export type PowerShellGeminiFetcher = FetchLike & {
 };
 
 export type PowerShellHost = 'pwsh' | 'powershell.exe';
-export type PowerShellTransportErrorCategory = 'shell_not_found' | 'shell_spawn_error' | 'powershell_script_error' | 'powershell_http_error' | 'powershell_timeout' | 'provider_http_error';
+export type PowerShellTransportErrorCategory = 'shell_not_found' | 'shell_spawn_error' | 'powershell_script_error' | 'powershell_http_error' | 'powershell_timeout' | 'provider_http_error' | 'script_parse_error' | 'stdin_parse_error' | 'request_serialization_error' | 'invoke_webrequest_error' | 'tls_error' | 'connection_timeout' | 'dns_error' | 'http_error' | 'response_parse_error' | 'child_timeout';
 type TransportOptions = { dryRun?: boolean; shell?: PowerShellHost };
 
 export class PowerShellTransportError extends Error {
@@ -113,9 +113,15 @@ async function runPowerShellAttempt(shell: PowerShellHost, environment: PowerShe
       }
       const rawEnvelope = Buffer.concat(stdout).toString('utf8');
       try {
-        const envelope = JSON.parse(rawEnvelope) as { ok?: unknown; status?: unknown; body?: unknown; category?: unknown };
+        const envelope = JSON.parse(rawEnvelope) as { ok?: unknown; status?: unknown; body?: unknown; category?: unknown; message?: unknown };
+        if (envelope.ok !== true && typeof envelope.status === 'number') {
+          const errorBody = typeof envelope.body === 'string' ? envelope.body : JSON.stringify({ error: { message: typeof envelope.message === 'string' ? envelope.message : 'Provider returned an HTTP error.' } });
+          resolveAttempt({ status: envelope.status, body: Buffer.from(errorBody, 'utf8'), latencyMs: Date.now() - started, retryAfterSeconds: retryLine ? parseRetryAfter(retryLine.slice(21)) : undefined, errorCategory: typeof envelope.category === 'string' ? envelope.category as PowerShellTransportErrorCategory : 'provider_http_error' });
+          return;
+        }
         if (envelope.ok !== true || typeof envelope.status !== 'number' || typeof envelope.body !== 'string') {
-          resolveAttempt({ status: null, body: Buffer.alloc(0), latencyMs: Date.now() - started, errorCategory: typeof envelope.category === 'string' && envelope.category === 'powershell_timeout' ? 'powershell_timeout' : 'powershell_script_error' });
+          const category = typeof envelope.category === 'string' ? envelope.category as PowerShellTransportErrorCategory : 'response_parse_error';
+          resolveAttempt({ status: null, body: Buffer.alloc(0), latencyMs: Date.now() - started, errorCategory: category });
           return;
         }
         resolveAttempt({ status: envelope.status, body: Buffer.from(envelope.body, 'utf8'), latencyMs: Date.now() - started, retryAfterSeconds: retryLine ? parseRetryAfter(retryLine.slice(21)) : undefined });

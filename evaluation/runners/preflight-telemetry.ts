@@ -19,8 +19,8 @@ export function finishAttempt(attempt: number, startedAt: number, status: number
 }
 
 export function classifyAttempt(status: number | null, stage: string, signalAborted = false, transportCategory?: string): string {
-  if (transportCategory === 'shell_not_found' || transportCategory === 'shell_spawn_error' || transportCategory === 'powershell_script_error') return transportCategory;
-  if (transportCategory === 'powershell_timeout') return 'evaluation_transport_timeout';
+  if (transportCategory === 'shell_not_found' || transportCategory === 'shell_spawn_error' || transportCategory === 'powershell_script_error' || transportCategory === 'script_parse_error' || transportCategory === 'stdin_parse_error' || transportCategory === 'request_serialization_error' || transportCategory === 'response_parse_error' || transportCategory === 'child_timeout') return transportCategory;
+  if (transportCategory === 'powershell_timeout' || transportCategory === 'connection_timeout') return 'evaluation_transport_timeout';
   if (status === 400) return stage === 'gate' ? 'structured_gate_provider_rejection' : 'invalid_request';
   if (status === 401 || status === 403) return 'authentication_error';
   if (status === 404) return 'invalid_model_or_endpoint';

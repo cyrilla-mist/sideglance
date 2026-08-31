@@ -44,6 +44,10 @@ if ($confirmation -cne 'YES') {
   exit 2
 }
 
+npm.cmd exec vite-node -- evaluation/runners/real-transport-connectivity-check.ts
+$connectivityExitCode = $LASTEXITCODE
+if ($connectivityExitCode -ne 0) { exit $connectivityExitCode }
+
 npm.cmd exec vite-node -- evaluation/runners/task09b-four-case-preflight-03.ts
 $runnerExitCode = $LASTEXITCODE
 $reportPath = 'evaluation/reports/task09b-four-case-preflight-05.json'
