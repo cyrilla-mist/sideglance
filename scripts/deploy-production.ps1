@@ -1,8 +1,12 @@
-param([string]$ProductionUrl = '')
+param(
+  [string]$ProductionUrl = '',
+  [string]$ReadinessScriptPath = ''
+)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
-$readiness = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'scripts/check-production-readiness.ps1')
+$readinessPath = if ($ReadinessScriptPath) { $ReadinessScriptPath } else { Join-Path $root 'scripts/check-production-readiness.ps1' }
+$readiness = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $readinessPath
 if ($readiness -notcontains 'READY_FOR_DEPLOY') { $readiness | ForEach-Object { Write-Output $_ }; Write-Output 'Stopped before deployment.'; exit 1 }
 Write-Output 'This will deploy sideglance-worker-production to Cloudflare.'
 $confirmation = Read-Host 'Type DEPLOY to continue'
@@ -19,7 +23,12 @@ try {
 } finally { $ErrorActionPreference = $previousErrorActionPreference }
 $deployOutput | ForEach-Object { Write-Output $_ }
 if ($deployExitCode -ne 0) { Write-Output 'DEPLOY_FAILED'; exit 1 }
-$workersDevUrl = if ($ProductionUrl) { $ProductionUrl } else { (($deployOutput | Out-String) -match '(https://[^\s/]+\.workers\.dev)'; $Matches[1]) }
+$deployText = $deployOutput | Out-String
+$workersDevUrl = $ProductionUrl
+if (-not $workersDevUrl) {
+  $urlMatch = [regex]::Match($deployText, 'https://[^\s/]+\.workers\.dev')
+  if ($urlMatch.Success) { $workersDevUrl = $urlMatch.Value }
+}
 if ($workersDevUrl -notmatch '^https://[^/\s]+\.workers\.dev/?$') { Write-Output 'DEPLOY_FAILED: no credible workers.dev URL found.'; exit 1 }
 $reportDir = Join-Path $root 'docs/reports'
 New-Item -ItemType Directory -Force -Path $reportDir | Out-Null

@@ -1,4 +1,7 @@
-import { readFileSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { delimiter, join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
 
 const read = (path: string) => readFileSync(path, 'utf8');
@@ -67,4 +70,66 @@ describe('production operator safeguards', () => {
   it('enables explicit workers.dev routing for production', () => {
     expect(read('wrangler.toml')).toContain('workers_dev = true');
   });
+  it('passes all production PowerShell operators through the real Windows parser', () => {
+    const files = [
+      'scripts/deploy-production.ps1',
+      'scripts/configure-production.ps1',
+      'scripts/check-production-readiness.ps1',
+      'scripts/run-production-smoke.ps1',
+    ];
+    const root = process.cwd().replace(/'/g, "''");
+    const command = `$root = '${root}'; $files = @('${files.join("','")}'); foreach ($file in $files) { $tokens = $null; $errors = $null; [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $root $file), [ref]$tokens, [ref]$errors) | Out-Null; if ($errors.Count -ne 0) { $errors | ForEach-Object { Write-Output \"\${file}: $($_.Message)\" }; exit 1 } }; exit 0`;
+    expect(() => execFileSync('powershell.exe', ['-NoProfile', '-Command', command], { encoding: 'utf8' })).not.toThrow();
+  });
+  it('runs the deploy operator safely against mocked Wrangler output', () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'sideglance-deploy-'));
+    const readinessPath = join(tempRoot, 'readiness.ps1');
+    const npxPath = join(tempRoot, 'npx.cmd');
+    const reportPath = join(process.cwd(), 'docs/reports/task10-production-deploy.json');
+    writeFileSync(readinessPath, "Write-Output 'READY_FOR_DEPLOY'\n", 'utf8');
+    const run = (output: string, exitCode: number, confirmation = 'DEPLOY') => {
+      const escapedOutput = output.replace(/%/g, '%%').replace(/\r?\n/g, '\r\necho ');
+      writeFileSync(npxPath, `@echo off\r\necho ${escapedOutput}\r\nexit /b ${exitCode}\r\n`, 'utf8');
+      return spawnSync('powershell.exe', [
+        '-NoProfile',
+        '-ExecutionPolicy', 'Bypass',
+        '-File', join(process.cwd(), 'scripts/deploy-production.ps1'),
+        '-ReadinessScriptPath', readinessPath,
+      ], {
+        encoding: 'utf8',
+        input: `${confirmation}\n`,
+        env: { ...process.env, PATH: `${tempRoot}${delimiter}${process.env.PATH ?? ''}` },
+      });
+    };
+    try {
+      const success = run('Published https://sideglance-worker-production.example.workers.dev', 0);
+      expect(success.status).toBe(0);
+      expect(success.stdout).toContain('DEPLOY_SUCCESS');
+      expect(JSON.parse(readFileSync(reportPath, 'utf8').replace(/^\uFEFF/, '')).productionUrl).toBe('https://sideglance-worker-production.example.workers.dev');
+      unlinkSync(reportPath);
+
+      const warning = run('WARNING deployment completed\r\nPublished https://sideglance-worker-production.example.workers.dev', 0);
+      expect(warning.status).toBe(0);
+      expect(warning.stdout).toContain('DEPLOY_SUCCESS');
+      unlinkSync(reportPath);
+
+      const noUrl = run('Published deployment without route URL', 0);
+      expect(noUrl.status).toBe(1);
+      expect(noUrl.stdout).toContain('DEPLOY_FAILED');
+      expect(existsSync(reportPath)).toBe(false);
+
+      const nativeFailure = run('ERROR deployment failed', 7);
+      expect(nativeFailure.status).toBe(1);
+      expect(nativeFailure.stdout).toContain('DEPLOY_FAILED');
+      expect(existsSync(reportPath)).toBe(false);
+
+      const wrongConfirmation = run('SHOULD_NOT_RUN', 0, 'NO');
+      expect(wrongConfirmation.status).toBe(1);
+      expect(wrongConfirmation.stdout).toContain('No deployment performed');
+      expect(wrongConfirmation.stdout).not.toContain('SHOULD_NOT_RUN');
+    } finally {
+      if (existsSync(reportPath)) unlinkSync(reportPath);
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  }, 30000);
 });
