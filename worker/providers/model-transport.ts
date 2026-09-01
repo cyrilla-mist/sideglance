@@ -1,5 +1,5 @@
-export type ModelTransportMode = 'direct' | 'cloudflare_ai_gateway' | 'cloudflare_google_openai_passthrough';
-export type ModelTransportFailure = 'gateway_auth_error' | 'gateway_rate_limited' | 'gateway_provider_unavailable' | 'gateway_timeout' | 'gateway_invalid_request' | 'transport_error';
+export type ModelTransportMode = 'direct' | 'cloudflare_ai_gateway' | 'cloudflare_google_native';
+export type ModelTransportFailure = 'gateway_auth_error' | 'gateway_rate_limited' | 'gateway_provider_unavailable' | 'gateway_timeout' | 'gateway_invalid_request' | 'structured_output_rejected' | 'model_contract_error' | 'transport_error';
 
 export type ModelMessage = { role: 'system' | 'user' | 'assistant'; content: string };
 export type ModelChatRequest = { model: string; messages: ModelMessage[]; temperature?: number; response_format?: unknown; reasoning_effort?: 'low' | 'medium' | 'high' };
@@ -37,11 +37,11 @@ const GATEWAY_ENDPOINT = 'https://api.cloudflare.com/client/v4/accounts';
 
 export function createModelTransport(config: ModelTransportConfig): ModelTransport {
   if (config.mode !== 'direct' && !config.model) throw new ModelTransportConfigError('missing_model_config', 'Model name is not configured.');
-  if (config.mode === 'cloudflare_google_openai_passthrough') {
+  if (config.mode === 'cloudflare_google_native') {
     if (!config.accountId) throw new ModelTransportConfigError('missing_gateway_account', 'Cloudflare account ID is not configured.');
     if (!config.cloudflareAigToken) throw new ModelTransportConfigError('missing_gateway_token', 'Cloudflare AI Gateway token is not configured.');
     if (!config.apiKey) throw new ModelTransportConfigError('missing_google_key', 'Google AI Studio API key is not configured.');
-    return new CloudflareGoogleOpenAIPassthroughTransport(config);
+    return new CloudflareGoogleNativeTransport(config);
   }
   if (config.mode === 'cloudflare_ai_gateway') {
     if (!config.accountId) throw new ModelTransportConfigError('missing_gateway_account', 'Cloudflare account ID is not configured.');
@@ -69,16 +69,16 @@ export class CloudflareAIGatewayTransport implements ModelTransport {
   }
 }
 
-export class CloudflareGoogleOpenAIPassthroughTransport implements ModelTransport {
+export class CloudflareGoogleNativeTransport implements ModelTransport {
   private readonly fetcher: FetchLike;
   constructor(private readonly config: ModelTransportConfig) { this.fetcher = config.fetcher ?? defaultFetch; }
   chat(request: ModelChatRequest): Promise<Response> {
-    const url = `${GATEWAY_ENDPOINT.replace('/client/v4/accounts', '').replace('https://api.cloudflare.com', 'https://gateway.ai.cloudflare.com/v1')}/${encodeURIComponent(this.config.accountId!)}/default/google-ai-studio/v1beta/openai/chat/completions`;
-    return requestWithRetry(this.fetcher, url, { ...request, model: request.model }, { authorization: `Bearer ${this.config.apiKey}`, 'cf-aig-authorization': `Bearer ${this.config.cloudflareAigToken}`, 'cf-aig-collect-log-payload': 'false', 'content-type': 'application/json' }, this.config, 'gateway');
+    const url = `${GATEWAY_ENDPOINT.replace('/client/v4/accounts', '').replace('https://api.cloudflare.com', 'https://gateway.ai.cloudflare.com/v1')}/${encodeURIComponent(this.config.accountId!)}/default/google-ai-studio/v1/models/${encodeURIComponent(request.model)}:generateContent`;
+    return requestWithRetry(this.fetcher, url, toGeminiRequest(request), { 'x-goog-api-key': this.config.apiKey!, 'cf-aig-authorization': `Bearer ${this.config.cloudflareAigToken}`, 'cf-aig-collect-log-payload': 'false', 'content-type': 'application/json' }, this.config, 'gateway', true);
   }
 }
 
-async function requestWithRetry(fetcher: FetchLike, url: string, request: ModelChatRequest, headers: Record<string, string>, config: ModelTransportConfig, mode: 'direct' | 'gateway'): Promise<Response> {
+async function requestWithRetry(fetcher: FetchLike, url: string, request: unknown, headers: Record<string, string>, config: ModelTransportConfig, mode: 'direct' | 'gateway', nativeResponse = false): Promise<Response> {
   const deadline = Date.now() + (config.timeoutMs ?? DEFAULT_TIMEOUT_MS);
   let lastError: ModelTransportError | undefined;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
@@ -89,11 +89,12 @@ async function requestWithRetry(fetcher: FetchLike, url: string, request: ModelC
       const response = await fetcher(url, { method: 'POST', headers, body: JSON.stringify(request), signal: controller.signal });
       if (!response.ok) {
         const providerMessage = await response.clone().text().catch(() => '');
-        const error = new ModelTransportError(classifyStatus(response.status), safeProviderMessage(providerMessage), response.status, safeProviderMessage(providerMessage));
+        const safeMessage = safeProviderMessage(providerMessage);
+        const error = new ModelTransportError(classifyStatus(response.status, safeMessage), safeMessage, response.status, safeMessage);
         if (attempt < MAX_ATTEMPTS && isRetryableStatus(response.status) && Date.now() < deadline) { await boundedBackoff(config.retryBackoffMs ?? 100); continue; }
         throw error;
       }
-      return response;
+      return nativeResponse ? adaptGeminiResponse(response) : response;
     } catch (error) {
       if (error instanceof ModelTransportError) { lastError = error; if (attempt < MAX_ATTEMPTS && isRetryableStatus(error.status ?? 0) && Date.now() < deadline) { await boundedBackoff(config.retryBackoffMs ?? 100); continue; } throw error; }
       const aborted = controller.signal.aborted;
@@ -105,10 +106,37 @@ async function requestWithRetry(fetcher: FetchLike, url: string, request: ModelC
   throw lastError ?? new ModelTransportError(mode === 'gateway' ? 'transport_error' : 'transport_error', 'Model transport failed.');
 }
 
+function toGeminiRequest(request: ModelChatRequest): object {
+  const systemMessages = request.messages.filter(message => message.role === 'system');
+  const contents = request.messages.filter(message => message.role !== 'system').map(message => ({ role: message.role === 'assistant' ? 'model' : 'user', parts: [{ text: message.content }] }));
+  const responseFormat = request.response_format as { type?: string; json_schema?: { schema?: unknown } } | undefined;
+  const generationConfig: Record<string, unknown> = {};
+  if (responseFormat?.type === 'json_schema') {
+    generationConfig.responseMimeType = 'application/json';
+    generationConfig.responseJsonSchema = responseFormat.json_schema?.schema;
+  } else if (responseFormat?.type === 'json_object') {
+    generationConfig.responseMimeType = 'application/json';
+  }
+  return {
+    ...(systemMessages.length ? { systemInstruction: { parts: systemMessages.map(message => ({ text: message.content })) } } : {}),
+    contents,
+    ...(Object.keys(generationConfig).length ? { generationConfig } : {}),
+  };
+}
+
+async function adaptGeminiResponse(response: Response): Promise<Response> {
+  let payload: unknown;
+  try { payload = await response.json(); } catch { throw new ModelTransportError('model_contract_error', 'Provider returned invalid JSON.', response.status); }
+  const candidates = (payload as { candidates?: Array<{ content?: { parts?: Array<{ text?: unknown; thought?: unknown }> } }> } | null)?.candidates;
+  const text = candidates?.flatMap(candidate => candidate.content?.parts ?? []).filter(part => part.thought !== true && typeof part.text === 'string').map(part => part.text as string).join('') ?? '';
+  if (!text.trim()) throw new ModelTransportError('model_contract_error', 'Provider returned no normal text content.', response.status);
+  return Response.json({ choices: [{ message: { role: 'assistant', content: text } }] }, { status: response.status, headers: { 'content-type': 'application/json' } });
+}
+
 function defaultFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> { return globalThis.fetch(input, init); }
 function resolveChatEndpoint(endpoint: string): string { const url = new URL(endpoint); if (!url.pathname.endsWith('/chat/completions')) url.pathname = `${url.pathname.replace(/\/$/, '')}/chat/completions`; return url.toString(); }
 function isRetryableStatus(status: number): boolean { return status === 429 || (status >= 500 && status <= 504); }
-function classifyStatus(status: number): ModelTransportFailure { if (status === 401 || status === 403) return 'gateway_auth_error'; if (status === 429) return 'gateway_rate_limited'; if (status >= 500 && status <= 504) return 'gateway_provider_unavailable'; if (status >= 400 && status < 500) return 'gateway_invalid_request'; return 'transport_error'; }
+function classifyStatus(status: number, message = ''): ModelTransportFailure { if (status === 401 || status === 403) return 'gateway_auth_error'; if (status === 429) return 'gateway_rate_limited'; if (status >= 500 && status <= 504) return 'gateway_provider_unavailable'; if (status >= 400 && status < 500 && /schema|response[_ -]?format|structured|json_schema/i.test(message)) return 'structured_output_rejected'; if (status >= 400 && status < 500) return 'gateway_invalid_request'; return 'transport_error'; }
 function boundedBackoff(ms: number): Promise<void> { return new Promise(resolve => setTimeout(resolve, Math.min(Math.max(ms, 0), 500))); }
 function safeProviderMessage(text: string): string { try { const payload = JSON.parse(text) as { error?: { message?: unknown } }; if (typeof payload.error?.message === 'string') return redact(payload.error.message); } catch { /* bounded fallback */ } return redact(text) || 'Provider returned an error.'; }
 function redact(value: string): string { return value.replace(/Bearer\s+[^\s]+/gi, 'Bearer [redacted]').replace(/https?:\/\/[^\s)]+/gi, '[url redacted]').replace(/\s+/g, ' ').trim().slice(0, 500); }

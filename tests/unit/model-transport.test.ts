@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { CloudflareAIGatewayTransport, ModelTransportError, createModelTransport } from '../../worker/providers/model-transport';
+import { CloudflareAIGatewayTransport, CloudflareGoogleNativeTransport, ModelTransportError, createModelTransport } from '../../worker/providers/model-transport';
+import { contextGateResponseFormat } from '../../shared/schemas/context-gate-json';
 
 const request = { model: 'gemini-3.7-flash', messages: [{ role: 'user' as const, content: 'hello' }], response_format: { type: 'json_schema' } };
 
@@ -29,14 +30,18 @@ describe('Cloudflare AI Gateway transport', () => {
     expect(() => createModelTransport({ mode: 'cloudflare_ai_gateway', model: 'm', accountId: 'a' })).toThrow(/token is not configured/);
   });
 
-  it('uses the Google provider passthrough and keeps both auth boundaries plus privacy header', async () => {
+  it('uses the documented native Google Gateway endpoint and translates auth, messages, and schema', async () => {
     let url = ''; let init: RequestInit | undefined;
-    const transport = createModelTransport({ mode: 'cloudflare_google_openai_passthrough', model: 'gemini-3.7-flash', accountId: 'a', cloudflareAigToken: 'cf-test-token', apiKey: 'google-test-key', fetcher: async (input, requestInit) => { url = String(input); init = requestInit; return new Response('{}', { status: 200 }); } });
-    await transport.chat(request);
-    expect(url).toBe('https://gateway.ai.cloudflare.com/v1/a/default/google-ai-studio/v1beta/openai/chat/completions');
+    const transport = createModelTransport({ mode: 'cloudflare_google_native', model: 'gemini-3.7-flash', accountId: 'a', cloudflareAigToken: 'cf-test-token', apiKey: 'google-test-key', fetcher: async (input, requestInit) => { url = String(input); init = requestInit; return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: 'thought', thought: true }, { text: '{"status":"ready"}' }] } }] }), { status: 200 }); } });
+    const nativeRequest = { ...request, response_format: contextGateResponseFormat, messages: [{ role: 'system' as const, content: 'system text' }, ...request.messages] };
+    const response = await transport.chat(nativeRequest);
+    expect(url).toBe('https://gateway.ai.cloudflare.com/v1/a/default/google-ai-studio/v1/models/gemini-3.7-flash:generateContent');
     expect(url).not.toContain('/default/compat/chat/completions');
-    expect(init?.headers).toMatchObject({ authorization: 'Bearer google-test-key', 'cf-aig-authorization': 'Bearer cf-test-token', 'cf-aig-collect-log-payload': 'false' });
-    expect(JSON.parse(String(init?.body))).toMatchObject({ model: 'gemini-3.7-flash', response_format: request.response_format });
-    expect(JSON.parse(String(init?.body)).model).not.toContain('google-ai-studio/');
+    expect(init?.headers).toMatchObject({ 'x-goog-api-key': 'google-test-key', 'cf-aig-authorization': 'Bearer cf-test-token', 'cf-aig-collect-log-payload': 'false' });
+    expect(init?.headers).not.toHaveProperty('authorization');
+    const body = JSON.parse(String(init?.body));
+    expect(body).toMatchObject({ systemInstruction: { parts: [{ text: 'system text' }] }, contents: [{ role: 'user', parts: [{ text: 'hello' }] }], generationConfig: { responseMimeType: 'application/json', responseJsonSchema: contextGateResponseFormat.json_schema.schema } });
+    expect(body.model).toBeUndefined();
+    expect(await response.json()).toEqual({ choices: [{ message: { role: 'assistant', content: '{"status":"ready"}' } }] });
   });
 });
