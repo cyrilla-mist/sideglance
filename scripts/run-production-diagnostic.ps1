@@ -72,6 +72,7 @@ if ($ambiguous.status -eq 502 -and $ambiguousJson -and $ambiguous.safeCode -ne '
 elseif ($ambiguous.status -eq 502 -and -not $ambiguousJson -and -not $runtimeLog.matched) { $classification = 'PLATFORM_OR_EDGE_5XX' }
 elseif ($ambiguous.status -eq 502 -and -not $ambiguousJson -and $runtimeLog.matched) { $classification = 'WORKER_LOGGED_FAILURE' }
 elseif ($malformedPass) { $classification = 'PRODUCTION_DIAGNOSTIC_CASE_NOT_502' }
+elseif ($malformed.status -eq 400) { $classification = 'MALFORMED_CONTROL_RESPONSE_UNEXPECTED' }
 else { $classification = 'WORKER_APPLICATION_RESPONSE_PATH_ISSUE' }
 $report = [ordered]@{ health = [ordered]@{ status = $health.status; latencyMs = $health.latencyMs }; malformed = [ordered]@{ status = $malformed.status; contentType = $malformed.contentType; responseFormat = $malformed.responseFormat; safeCode = $malformed.safeCode }; ambiguous = [ordered]@{ status = $ambiguous.status; contentType = $ambiguous.contentType; responseFormat = $ambiguous.responseFormat; safeCode = $ambiguous.safeCode; requestId = $ambiguous.requestId; latencyMs = $ambiguous.latencyMs }; runtimeLog = $runtimeLog; finalClassification = $classification }
 $report | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $reportPath -Encoding UTF8

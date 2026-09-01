@@ -1,5 +1,6 @@
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:http';
 import { delimiter, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
@@ -160,6 +161,8 @@ describe('production operator safeguards', () => {
     expect(diagnostic).toContain('Stop-Process');
     expect(diagnostic).not.toContain('Friday');
     expect(diagnostic).not.toContain('MODEL_API_KEY');
+    expect(diagnostic).toContain("$malformed.status -eq 400");
+    expect(diagnostic).toContain('MALFORMED_CONTROL_RESPONSE_UNEXPECTED');
   });
   it('keeps Worker failure correlation and runtime logs allowlisted', () => {
     const route = read('worker/routes/decode.ts');
@@ -171,4 +174,55 @@ describe('production operator safeguards', () => {
     expect(logLine).toContain('diagnosticCode');
     expect(logLine).not.toMatch(/inputText|additionalContext|Authorization|MODEL_API_KEY|CLOUDFLARE_AIG_TOKEN/i);
   });
+  it('executes the real curl stdin transport against local 200, 400, and 502 fixtures', async () => {
+    const receivedBodies: string[] = [];
+    const server = createServer((request, response) => {
+      const chunks: Buffer[] = [];
+      request.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+      request.on('end', () => {
+        receivedBodies.push(Buffer.concat(chunks).toString('utf8'));
+        const status = request.url === '/bad' ? 400 : request.url === '/upstream' ? 502 : 200;
+        const body = request.url === '/empty' ? '' : JSON.stringify({ status, message: 'fearless behavior 💀', braces: { intact: true } });
+        response.writeHead(status, { 'content-type': request.url === '/text' ? 'text/plain' : 'application/json' });
+        response.end(body);
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') { server.close(); throw new Error('Could not start fixture server.'); }
+    const tempRoot = mkdtempSync(join(tmpdir(), 'sideglance-curl-test-'));
+    const helperPath = join(process.cwd(), 'scripts/production-http.ps1').replace(/'/g, "''");
+    const url = `http://127.0.0.1:${address.port}`;
+    const bodyBase64 = Buffer.from('{"inputText":"fearless behavior 💀","nested":{"brace":"{}"}}', 'utf8').toString('base64');
+    const scriptPath = join(tempRoot, 'run-curl-fixtures.ps1');
+    writeFileSync(scriptPath, [
+      `$ErrorActionPreference = 'Stop'`,
+      `. '${helperPath}'`,
+      `$body = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('${bodyBase64}'))`,
+      `$a = Invoke-SideglanceHttpCurl -Method POST -Uri '${url}/ok' -BodyJson $body`,
+      `$b = Invoke-SideglanceHttpCurl -Method POST -Uri '${url}/bad' -BodyJson $body`,
+      `$c = Invoke-SideglanceHttpCurl -Method POST -Uri '${url}/upstream' -BodyJson $body`,
+      `@($a,$b,$c) | ConvertTo-Json -Depth 5`,
+    ].join('\n'), 'utf8');
+    try {
+      const result = await new Promise<{ status: number | null; stdout: string; stderr: string }>((resolve, reject) => {
+        const child = spawn('powershell.exe', ['-NoProfile', '-File', scriptPath], { encoding: 'utf8' });
+        let stdout = '';
+        let stderr = '';
+        child.stdout.on('data', (chunk) => { stdout += chunk.toString(); });
+        child.stderr.on('data', (chunk) => { stderr += chunk.toString(); });
+        child.on('error', reject);
+        child.on('close', (status) => resolve({ status, stdout, stderr }));
+      });
+      expect(result.status, result.stderr).toBe(0);
+      const captures = JSON.parse(result.stdout) as Array<{ status: number; body: string }>;
+      expect(captures.map((capture) => capture.status)).toEqual([200, 400, 502]);
+      expect(captures.every((capture) => capture.body.includes('fearless behavior'))).toBe(true);
+      expect(receivedBodies).toHaveLength(3);
+      expect(receivedBodies.every((body) => body.includes('fearless behavior 💀') && body.includes('{}'))).toBe(true);
+    } finally {
+      server.close();
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  }, 30000);
 });
