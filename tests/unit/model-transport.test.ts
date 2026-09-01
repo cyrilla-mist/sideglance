@@ -29,11 +29,14 @@ describe('Cloudflare AI Gateway transport', () => {
     expect(() => createModelTransport({ mode: 'cloudflare_ai_gateway', model: 'm', accountId: 'a' })).toThrow(/token is not configured/);
   });
 
-  it('uses the default compat gateway and keeps both auth boundaries plus privacy header', async () => {
+  it('uses the Google provider passthrough and keeps both auth boundaries plus privacy header', async () => {
     let url = ''; let init: RequestInit | undefined;
-    const transport = createModelTransport({ mode: 'cloudflare_ai_gateway_byok', model: 'gemini-3.7-flash', accountId: 'a', cloudflareAigToken: 'cf-test-token', apiKey: 'google-test-key', fetcher: async (input, requestInit) => { url = String(input); init = requestInit; return new Response('{}', { status: 200 }); } });
+    const transport = createModelTransport({ mode: 'cloudflare_google_openai_passthrough', model: 'gemini-3.7-flash', accountId: 'a', cloudflareAigToken: 'cf-test-token', apiKey: 'google-test-key', fetcher: async (input, requestInit) => { url = String(input); init = requestInit; return new Response('{}', { status: 200 }); } });
     await transport.chat(request);
-    expect(url).toBe('https://gateway.ai.cloudflare.com/v1/a/default/compat/chat/completions');
+    expect(url).toBe('https://gateway.ai.cloudflare.com/v1/a/default/google-ai-studio/v1beta/openai/chat/completions');
+    expect(url).not.toContain('/default/compat/chat/completions');
     expect(init?.headers).toMatchObject({ authorization: 'Bearer google-test-key', 'cf-aig-authorization': 'Bearer cf-test-token', 'cf-aig-collect-log-payload': 'false' });
+    expect(JSON.parse(String(init?.body))).toMatchObject({ model: 'gemini-3.7-flash', response_format: request.response_format });
+    expect(JSON.parse(String(init?.body)).model).not.toContain('google-ai-studio/');
   });
 });

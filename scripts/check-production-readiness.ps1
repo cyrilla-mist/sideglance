@@ -19,7 +19,7 @@ Run-Check 'build' 'npm.cmd' @('run', 'build')
 
 if (-not (Test-Path (Join-Path $root 'node_modules/.bin/wrangler.ps1'))) { $blockers.Add('Wrangler is not installed') }
 $config = Get-Content (Join-Path $root 'wrangler.toml') -Raw
-if ($config -notmatch 'MODEL_TRANSPORT\s*=\s*"cloudflare_ai_gateway_byok"') { $blockers.Add('BYOK Gateway transport is not configured') }
+if ($config -notmatch 'MODEL_TRANSPORT\s*=\s*"cloudflare_google_openai_passthrough"') { $blockers.Add('Google AI Studio Gateway passthrough is not configured') }
 if ($config -match 'CLOUDFLARE_(AIG_)?API_TOKEN\s*=') { $blockers.Add('token appears in tracked Wrangler config') }
 if (Test-Path (Join-Path $root '.git\index')) {
   $tracked = git ls-files -- '.dev.vars' '.dev.vars.*' | Out-String

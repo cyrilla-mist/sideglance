@@ -1,8 +1,8 @@
 # Task 10 production transport
 
-Status: `DEPLOYED` · `HEALTH_PASS` · `AI_SMOKE_FAILED_DIAGNOSTIC_PENDING`
+Status: `IMPLEMENTED_LOCALLY` · `REDEPLOY_REQUIRED` · `PRODUCTION_AI_REVALIDATION_PENDING`
 
-The Worker keeps fixture mode network-free. AI mode selects either the existing direct OpenAI-compatible transport (`MODEL_TRANSPORT=direct`), the optional Unified Billing transport, or the production BYOK transport (`MODEL_TRANSPORT=cloudflare_ai_gateway_byok`). Both the Context Gate and Context Interpreter share one configured transport instance.
+The Worker keeps fixture mode network-free. AI mode selects either the existing direct OpenAI-compatible transport (`MODEL_TRANSPORT=direct`), the optional Unified Billing transport, or the production Google AI Studio provider passthrough (`MODEL_TRANSPORT=cloudflare_google_openai_passthrough`). Both the Context Gate and Context Interpreter share one configured transport instance.
 
 ## Production request path
 
@@ -11,8 +11,8 @@ Browser
   ↓
 Cloudflare Worker
   ├─ Context Gate ─┐
-  └─ Interpreter ──┴─ POST https://gateway.ai.cloudflare.com/v1/{account}/default/compat/chat/completions
-                         model: google-ai-studio/{MODEL_NAME}
+  └─ Interpreter ──┴─ POST https://gateway.ai.cloudflare.com/v1/{account}/default/google-ai-studio/v1beta/openai/chat/completions
+                         model: {MODEL_NAME}
                          ↓
                     Google AI Studio / Gemini
   ↓
@@ -28,7 +28,7 @@ The BYOK transport uses the Worker-only `cf-aig-authorization: Bearer <CLOUDFLAR
 Non-secret Worker variables:
 
 - `CONTEXT_ENGINE_MODE=ai`
-- `MODEL_TRANSPORT=cloudflare_ai_gateway_byok`
+- `MODEL_TRANSPORT=cloudflare_google_openai_passthrough`
 - `MODEL_NAME=<approved production model>`
 - `CLOUDFLARE_ACCOUNT_ID=<account id>` (the operator stores this as a Worker secret so account metadata is not committed)
 
@@ -45,7 +45,7 @@ Each model stage has a 30-second total transport budget and at most two attempts
 
 The Gate `response_format.type=json_schema` and Interpreter structured response format are passed through unchanged. Malformed JSON, empty input, and oversized input/context are rejected before model work. The current model remains configurable; `PRODUCTION_MODEL_FINALIZATION_PENDING_EVALUATION` remains in force until the frozen evaluation evidence is sufficient.
 
-The first production AI smoke reached the deployed Worker but returned HTTP 502 for all three model cases. The sanitized report contained `unknown_502` and no response body or diagnostic code, so the underlying Gateway/provider cause remains unconfirmed. The Worker now returns a short request ID on controlled failures and emits allowlisted failure telemetry; use `scripts/run-production-diagnostic.ps1` for the next single-case diagnosis. Production AI validation remains pending.
+The first production AI smoke reached the deployed Worker but returned HTTP 502 for all three model cases through the deprecated unified compat surface. This local change migrates production transport to the provider-specific Google AI Studio passthrough; it is not claimed production-fixed until redeployment and the single-case diagnostic succeed.
 
 ## Post-deploy smoke plan (not run here)
 

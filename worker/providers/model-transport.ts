@@ -1,4 +1,4 @@
-export type ModelTransportMode = 'direct' | 'cloudflare_ai_gateway' | 'cloudflare_ai_gateway_byok';
+export type ModelTransportMode = 'direct' | 'cloudflare_ai_gateway' | 'cloudflare_google_openai_passthrough';
 export type ModelTransportFailure = 'gateway_auth_error' | 'gateway_rate_limited' | 'gateway_provider_unavailable' | 'gateway_timeout' | 'gateway_invalid_request' | 'transport_error';
 
 export type ModelMessage = { role: 'system' | 'user' | 'assistant'; content: string };
@@ -37,11 +37,11 @@ const GATEWAY_ENDPOINT = 'https://api.cloudflare.com/client/v4/accounts';
 
 export function createModelTransport(config: ModelTransportConfig): ModelTransport {
   if (config.mode !== 'direct' && !config.model) throw new ModelTransportConfigError('missing_model_config', 'Model name is not configured.');
-  if (config.mode === 'cloudflare_ai_gateway_byok') {
+  if (config.mode === 'cloudflare_google_openai_passthrough') {
     if (!config.accountId) throw new ModelTransportConfigError('missing_gateway_account', 'Cloudflare account ID is not configured.');
     if (!config.cloudflareAigToken) throw new ModelTransportConfigError('missing_gateway_token', 'Cloudflare AI Gateway token is not configured.');
     if (!config.apiKey) throw new ModelTransportConfigError('missing_google_key', 'Google AI Studio API key is not configured.');
-    return new CloudflareAIGatewayByokTransport(config);
+    return new CloudflareGoogleOpenAIPassthroughTransport(config);
   }
   if (config.mode === 'cloudflare_ai_gateway') {
     if (!config.accountId) throw new ModelTransportConfigError('missing_gateway_account', 'Cloudflare account ID is not configured.');
@@ -69,12 +69,12 @@ export class CloudflareAIGatewayTransport implements ModelTransport {
   }
 }
 
-export class CloudflareAIGatewayByokTransport implements ModelTransport {
+export class CloudflareGoogleOpenAIPassthroughTransport implements ModelTransport {
   private readonly fetcher: FetchLike;
   constructor(private readonly config: ModelTransportConfig) { this.fetcher = config.fetcher ?? defaultFetch; }
   chat(request: ModelChatRequest): Promise<Response> {
-    const url = `${GATEWAY_ENDPOINT.replace('/client/v4/accounts', '').replace('https://api.cloudflare.com', 'https://gateway.ai.cloudflare.com/v1')}/${encodeURIComponent(this.config.accountId!)}/default/compat/chat/completions`;
-    return requestWithRetry(this.fetcher, url, { ...request, model: `google-ai-studio/${request.model}` }, { authorization: `Bearer ${this.config.apiKey}`, 'cf-aig-authorization': `Bearer ${this.config.cloudflareAigToken}`, 'cf-aig-collect-log-payload': 'false', 'content-type': 'application/json' }, this.config, 'gateway');
+    const url = `${GATEWAY_ENDPOINT.replace('/client/v4/accounts', '').replace('https://api.cloudflare.com', 'https://gateway.ai.cloudflare.com/v1')}/${encodeURIComponent(this.config.accountId!)}/default/google-ai-studio/v1beta/openai/chat/completions`;
+    return requestWithRetry(this.fetcher, url, { ...request, model: request.model }, { authorization: `Bearer ${this.config.apiKey}`, 'cf-aig-authorization': `Bearer ${this.config.cloudflareAigToken}`, 'cf-aig-collect-log-payload': 'false', 'content-type': 'application/json' }, this.config, 'gateway');
   }
 }
 

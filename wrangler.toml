@@ -4,7 +4,7 @@ compatibility_date = "2026-08-21"
 
 [env.production.vars]
 CONTEXT_ENGINE_MODE = "ai"
-MODEL_TRANSPORT = "cloudflare_ai_gateway_byok"
+MODEL_TRANSPORT = "cloudflare_google_openai_passthrough"
 MODEL_NAME = "gemini-3.7-flash"
 
 [env.production]

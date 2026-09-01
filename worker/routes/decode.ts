@@ -133,8 +133,8 @@ function createContextEngine(env: WorkerEnv, transport?: ModelTransport): Contex
 }
 
 function createTransport(env: WorkerEnv): ModelTransport | undefined {
-  const mode = env.MODEL_TRANSPORT === 'cloudflare_ai_gateway_byok' ? 'cloudflare_ai_gateway_byok' : env.MODEL_TRANSPORT === 'cloudflare_ai_gateway' ? 'cloudflare_ai_gateway' : 'direct';
-  if (env.MODEL_TRANSPORT && !['direct', 'cloudflare_ai_gateway', 'cloudflare_ai_gateway_byok'].includes(env.MODEL_TRANSPORT)) throw new ModelTransportError('transport_error', 'Invalid model transport mode.');
+  const mode = env.MODEL_TRANSPORT === 'cloudflare_google_openai_passthrough' ? 'cloudflare_google_openai_passthrough' : env.MODEL_TRANSPORT === 'cloudflare_ai_gateway' ? 'cloudflare_ai_gateway' : 'direct';
+  if (env.MODEL_TRANSPORT && !['direct', 'cloudflare_ai_gateway', 'cloudflare_google_openai_passthrough'].includes(env.MODEL_TRANSPORT)) throw new ModelTransportError('transport_error', 'Invalid model transport mode.');
   if (mode === 'direct' && !env.MODEL_API_KEY) return undefined;
   return createModelTransport({ mode, apiKey: env.MODEL_API_KEY, endpoint: env.MODEL_API_URL, model: env.MODEL_NAME, accountId: env.CLOUDFLARE_ACCOUNT_ID, cloudflareToken: env.CLOUDFLARE_API_TOKEN, cloudflareAigToken: env.CLOUDFLARE_AIG_TOKEN });
 }
