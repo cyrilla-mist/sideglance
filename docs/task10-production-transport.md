@@ -1,6 +1,6 @@
 # Task 10 production transport
 
-Status: `IMPLEMENTED_LOCALLY` · `PENDING_CLOUDFLARE_CONFIGURATION` · `PENDING_DEPLOYMENT` · `PENDING_PRODUCTION_SMOKE`
+Status: `DEPLOYED` · `HEALTH_PASS` · `AI_SMOKE_FAILED_DIAGNOSTIC_PENDING`
 
 The Worker keeps fixture mode network-free. AI mode selects either the existing direct OpenAI-compatible transport (`MODEL_TRANSPORT=direct`), the optional Unified Billing transport, or the production BYOK transport (`MODEL_TRANSPORT=cloudflare_ai_gateway_byok`). Both the Context Gate and Context Interpreter share one configured transport instance.
 
@@ -44,6 +44,8 @@ Do not use `VITE_` for either credential, put them in tracked files, or log them
 Each model stage has a 30-second total transport budget and at most two attempts. Retries are limited to 429, 500–504, and a genuine timeout, with a short bounded backoff. `/api/decode` has a 65-second outer budget for Gate plus Interpreter. Client-visible errors are safe categories/messages; credentials, headers, internal endpoints, raw prompts, and model output are not logged or returned.
 
 The Gate `response_format.type=json_schema` and Interpreter structured response format are passed through unchanged. Malformed JSON, empty input, and oversized input/context are rejected before model work. The current model remains configurable; `PRODUCTION_MODEL_FINALIZATION_PENDING_EVALUATION` remains in force until the frozen evaluation evidence is sufficient.
+
+The first production AI smoke reached the deployed Worker but returned HTTP 502 for all three model cases. The sanitized report contained `unknown_502` and no response body or diagnostic code, so the underlying Gateway/provider cause remains unconfirmed. The Worker now returns a short request ID on controlled failures and emits allowlisted failure telemetry; use `scripts/run-production-diagnostic.ps1` for the next single-case diagnosis. Production AI validation remains pending.
 
 ## Post-deploy smoke plan (not run here)
 

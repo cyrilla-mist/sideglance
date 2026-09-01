@@ -43,9 +43,11 @@ export type FailedResponse = {
   errorCode: 'invalid_request' | 'unknown_fixture' | 'invalid_response' | 'context_timeout' | 'context_invalid_json' | 'context_schema_invalid' | 'missing_api_key' | 'model_unavailable';
   message: string;
   diagnosticCode?: FailureDiagnosticCode;
+  requestId?: string;
 };
 
 export type FailureDiagnosticCode =
+  | 'invalid_request'
   | 'gateway_auth_error'
   | 'google_auth_error'
   | 'gateway_invalid_request'

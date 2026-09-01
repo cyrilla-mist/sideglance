@@ -3,34 +3,13 @@ $ErrorActionPreference = 'Stop'
 $base = $ProductionUrl.TrimEnd('/')
 $reportDir = Join-Path (Split-Path -Parent $PSScriptRoot) 'docs/reports'
 New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
+. (Join-Path $PSScriptRoot 'production-http.ps1')
 
 function Invoke-Json([string]$Path, [object]$Body) {
-  $started = [Diagnostics.Stopwatch]::StartNew()
-  $status = $null
-  $contentType = $null
+  $result = Invoke-SideglanceHttp -Method POST -Uri "$base$Path" -BodyJson ($Body | ConvertTo-Json -Depth 8)
   $json = $null
-  try {
-    $response = Invoke-WebRequest -UseBasicParsing -Method Post -Uri "$base$Path" -ContentType 'application/json' -Body ($Body | ConvertTo-Json -Depth 8)
-    $status = [int]$response.StatusCode
-    $contentType = [string]$response.Headers['Content-Type']
-    $json = $response.Content | ConvertFrom-Json
-  } catch {
-    $errorResponse = $_.Exception.Response
-    if ($errorResponse) {
-      $status = [int]$errorResponse.StatusCode
-      $contentType = [string]$errorResponse.Headers['Content-Type']
-      $stream = $errorResponse.GetResponseStream()
-      if ($stream) {
-        $reader = New-Object System.IO.StreamReader($stream)
-        try {
-          $responseText = $reader.ReadToEnd()
-          if ($responseText) { try { $json = $responseText | ConvertFrom-Json } catch { $json = $null } }
-        } finally { $reader.Dispose(); $stream.Dispose() }
-      }
-    }
-  }
-  $started.Stop()
-  return [pscustomobject]@{ status = $status; latencyMs = $started.ElapsedMilliseconds; contentType = $contentType; json = $json; responseReached = ($null -ne $status) }
+  if ($result.body) { try { $json = $result.body | ConvertFrom-Json } catch { $json = $null } }
+  return [pscustomobject]@{ status = $result.status; latencyMs = $result.latencyMs; contentType = $result.contentType; json = $json; responseReached = $result.responseReached }
 }
 
 function Get-SafeCode([object]$Result) {
@@ -64,8 +43,10 @@ function Test-SafeFailure([object]$Result) {
   return $Result.status -eq 400 -and $Result.json -and $Result.json.type -eq 'failed' -and $Result.json.errorCode -eq 'invalid_request' -and $Result.json.message -is [string]
 }
 
-$healthWatch = [Diagnostics.Stopwatch]::StartNew()
-try { $healthResponse = Invoke-WebRequest -UseBasicParsing -Method Get -Uri "$base/api/health"; $health = [pscustomobject]@{ pass = ([int]$healthResponse.StatusCode -eq 200 -and ($healthResponse.Content | ConvertFrom-Json).ok -eq $true); status = [int]$healthResponse.StatusCode; latencyMs = $healthWatch.ElapsedMilliseconds } } catch { $health = [pscustomobject]@{ pass = $false; status = $null; latencyMs = $healthWatch.ElapsedMilliseconds } }
+$healthResponse = Invoke-SideglanceHttp -Method GET -Uri "$base/api/health"
+$healthJson = $null
+if ($healthResponse.body) { try { $healthJson = $healthResponse.body | ConvertFrom-Json } catch { $healthJson = $null } }
+$health = [pscustomobject]@{ pass = ($healthResponse.status -eq 200 -and $healthJson.ok -eq $true); status = $healthResponse.status; latencyMs = $healthResponse.latencyMs }
 if (-not $health.pass) { @{ health = $health; finalVerdict = 'PRODUCTION_SMOKE_FAILED' } | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $reportDir 'task10-production-smoke.json') -Encoding UTF8; Write-Output 'PRODUCTION_SMOKE_FAILED'; exit 1 }
 
 Write-Output 'Health PASS. The next tests send Sideglance fixtures through the deployed Worker and Cloudflare AI Gateway.'

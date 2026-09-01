@@ -24,8 +24,10 @@ const MAX_INPUT_LENGTH = 4_000;
 const MAX_CONTEXT_LENGTH = 12_000;
 
 export async function handleDecode(request: Request, env: WorkerEnv = {}): Promise<Response> {
+  const requestId = crypto.randomUUID().replace(/-/g, '').slice(0, 12);
+  const started = Date.now();
   let body: unknown;
-  try { body = await request.json(); } catch { return json({ type: 'failed', errorCode: 'invalid_request', message: 'Request body must be valid JSON.' }, 400); }
+  try { body = await request.json(); } catch { return failure({ type: 'failed', errorCode: 'invalid_request', message: 'Request body must be valid JSON.', diagnosticCode: 'invalid_request' }, 400, 'invalid_request', requestId, env, started); }
   try {
     const request = parseDecodeRequest(body);
     if (request.inputText.length > MAX_INPUT_LENGTH) throw new Error('inputText exceeds the maximum length.');
@@ -49,10 +51,10 @@ export async function handleDecode(request: Request, env: WorkerEnv = {}): Promi
     if (decoded.type !== 'decoded') return json(decoded, 200);
     return json(assertDecodeResponse(contextAnalysis ? { ...decoded, contextAnalysis } : decoded), 200);
   } catch (error) {
-    if (error instanceof ContextProviderError) return json({ type: 'failed', errorCode: error.code === 'hallucinated_evidence' || error.code === 'invalid_evidence_reference' ? 'model_unavailable' : error.code, message: error.code === 'hallucinated_evidence' || error.code === 'invalid_evidence_reference' ? 'We could not verify the model explanation.' : error.message, ...(providerDiagnosticCode(error) ? { diagnosticCode: providerDiagnosticCode(error) } : {}) }, 502);
-    if (error instanceof ContextGateError) return json({ type: 'failed', errorCode: contextGateErrorCode(error), message: error.stage === 'missing_api_key' ? 'Context model API key is not configured.' : 'Context gate is unavailable.', ...(gateDiagnosticCode(error) ? { diagnosticCode: gateDiagnosticCode(error) } : {}) }, 502);
-    if (error instanceof ModelTransportError) return json({ type: 'failed', errorCode: 'model_unavailable', message: 'Context model is unavailable.', diagnosticCode: transportDiagnosticCode(error) }, 502);
-    return json({ type: 'failed', errorCode: 'invalid_request', message: error instanceof Error ? error.message : 'Invalid decode request.' }, 400);
+    if (error instanceof ContextProviderError) { const diagnosticCode = providerDiagnosticCode(error); return failure({ type: 'failed', errorCode: error.code === 'hallucinated_evidence' || error.code === 'invalid_evidence_reference' ? 'model_unavailable' : error.code, message: error.code === 'hallucinated_evidence' || error.code === 'invalid_evidence_reference' ? 'We could not verify the model explanation.' : error.message, ...(diagnosticCode ? { diagnosticCode } : {}) }, 502, diagnosticCode ?? 'unknown_502', requestId, env, started); }
+    if (error instanceof ContextGateError) { const diagnosticCode = gateDiagnosticCode(error); return failure({ type: 'failed', errorCode: contextGateErrorCode(error), message: error.stage === 'missing_api_key' ? 'Context model API key is not configured.' : 'Context gate is unavailable.', ...(diagnosticCode ? { diagnosticCode } : {}) }, 502, diagnosticCode ?? 'unknown_502', requestId, env, started); }
+    if (error instanceof ModelTransportError) { const diagnosticCode = transportDiagnosticCode(error); return failure({ type: 'failed', errorCode: 'model_unavailable', message: 'Context model is unavailable.', diagnosticCode }, 502, diagnosticCode, requestId, env, started); }
+    return failure({ type: 'failed', errorCode: 'invalid_request', message: error instanceof Error ? error.message : 'Invalid decode request.', diagnosticCode: 'invalid_request' }, 400, 'invalid_request', requestId, env, started);
   }
 }
 
@@ -104,6 +106,19 @@ function statusDiagnosticCode(status: number, providerMessage?: string): Failure
 }
 
 function json(value: DecodeResponse, status: number): Response { return Response.json(value, { status }); }
+
+function failure(value: DecodeResponse, status: number, diagnosticCode: FailureDiagnosticCode, requestId: string, env: WorkerEnv, started: number): Response {
+  const response = { ...value, requestId } as DecodeResponse;
+  console.error(JSON.stringify({ event: 'decode_failure', requestId, stage: failureStage(value), diagnosticCode, httpStatus: status, transportMode: env.MODEL_TRANSPORT ?? 'fixture', model: env.MODEL_NAME ?? null, latencyMs: Date.now() - started }));
+  return json(response, status);
+}
+
+function failureStage(value: DecodeResponse): string {
+  if (value.type !== 'failed') return 'unknown';
+  if (value.diagnosticCode === 'invalid_request') return 'request_validation';
+  if (value.diagnosticCode === 'model_contract_error') return 'model_contract';
+  return 'model_transport';
+}
 
 function createContextEngine(env: WorkerEnv, transport?: ModelTransport): ContextEngine {
   if (env.CONTEXT_ENGINE_MODE === 'ai') {

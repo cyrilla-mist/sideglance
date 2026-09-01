@@ -36,13 +36,13 @@ describe('worker health route', () => {
     const emptyResponse = await worker.fetch(new Request('http://localhost/api/decode', { method: 'POST', body: JSON.stringify({ inputText: '   ' }), headers: { 'content-type': 'application/json' } }));
     expect(await emptyResponse.json()).toMatchObject({ type: 'failed', errorCode: 'invalid_request' });
     const invalidResponse = await worker.fetch(new Request('http://localhost/api/decode', { method: 'POST', body: '{', headers: { 'content-type': 'application/json' } }));
-    expect(await invalidResponse.json()).toEqual({ type: 'failed', errorCode: 'invalid_request', message: 'Request body must be valid JSON.' });
+    expect(await invalidResponse.json()).toMatchObject({ type: 'failed', errorCode: 'invalid_request', message: 'Request body must be valid JSON.', diagnosticCode: 'invalid_request' });
   });
 
   it('does not fall back to fixture or expose details when AI mode lacks a key', async () => {
     const response = await worker.fetch(new Request('http://localhost/api/decode', { method: 'POST', body: JSON.stringify({ inputText: 'touch grass' }), headers: { 'content-type': 'application/json' } }), { CONTEXT_ENGINE_MODE: 'ai' });
     expect(response.status).toBe(502);
-    expect(await response.json()).toEqual({ type: 'failed', errorCode: 'missing_api_key', message: 'Context model API key is not configured.' });
+    expect(await response.json()).toMatchObject({ type: 'failed', errorCode: 'missing_api_key', message: 'Context model API key is not configured.' });
   });
 
   it('evaluates the fixture context output independently from the API route', () => {
