@@ -152,6 +152,9 @@ describe('production operator safeguards', () => {
     expect(smoke).toContain('Invoke-SideglanceHttp');
     const diagnostic = read('scripts/run-production-diagnostic.ps1');
     expect(read('scripts/production-http.ps1')).toContain('curl.exe');
+    expect(read('scripts/production-http.ps1')).toContain("ValidateSet('Auto', 'PowerShell', 'Curl')");
+    expect(read('scripts/production-http.ps1')).toContain('Select-SideglanceHttpClient');
+    expect(smoke).toContain('$SelectedHttpClient = $clientSelection.client');
     expect(diagnostic).toContain("-cne 'YES'");
     expect(diagnostic).toContain('sideglance-worker-production');
     expect(diagnostic).toContain('Stop-Process');

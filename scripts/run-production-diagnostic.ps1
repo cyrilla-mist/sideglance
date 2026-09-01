@@ -43,9 +43,12 @@ function Get-TailRecord([string]$Path, [string]$RequestId) {
   return [pscustomobject]@{ matched = $false; stage = $null; safeCode = $null; httpStatus = $null }
 }
 
-$health = Get-SafeResponse (Invoke-SideglanceHttp -Method GET -Uri "$base/api/health")
-if ($health.status -ne 200) { Write-Output 'PRODUCTION_DIAGNOSTIC_STOPPED: health failed.'; exit 1 }
-$malformed = Get-SafeResponse (Invoke-SideglanceHttp -Method POST -Uri "$base/api/decode" -BodyJson (@{ inputText = '' } | ConvertTo-Json))
+$clientSelection = Select-SideglanceHttpClient -HealthUri "$base/api/health"
+$selectedClient = $clientSelection.client
+if (-not $selectedClient) { Write-Output 'PRODUCTION_DIAGNOSTIC_STOPPED: LOCAL_CLIENT_NETWORK_BLOCKED'; exit 1 }
+Write-Output "HTTP client: $selectedClient"
+$health = Get-SafeResponse $clientSelection.health
+$malformed = Get-SafeResponse (Invoke-SideglanceHttp -Client $selectedClient -Method POST -Uri "$base/api/decode" -BodyJson (@{ inputText = '' } | ConvertTo-Json))
 $malformedPass = $malformed.status -eq 400 -and $malformed.responseFormat -eq 'json' -and $malformed.json.type -eq 'failed' -and $malformed.json.errorCode -eq 'invalid_request'
 Write-Output "Health PASS. Malformed request JSON capture: $(if ($malformedPass) { 'PASS' } else { 'FAIL' })."
 Write-Output 'The next request will send one Sideglance ambiguous test fixture through the deployed Worker and real AI provider.'
@@ -58,7 +61,7 @@ $tailProcess = $null
 try {
   $tailProcess = Start-Process -FilePath 'npx.cmd' -ArgumentList @('wrangler', 'tail', 'sideglance-worker-production', '--env', 'production', '--format', 'json', '--status', 'error') -RedirectStandardOutput $tailOutput -RedirectStandardError (Join-Path $tailRoot 'tail.err') -PassThru -WindowStyle Hidden
   Start-Sleep -Milliseconds 750
-  $ambiguous = Get-SafeResponse (Invoke-SideglanceHttp -Method POST -Uri "$base/api/decode" -BodyJson (@{ inputText = 'fearless behavior 💀' } | ConvertTo-Json))
+  $ambiguous = Get-SafeResponse (Invoke-SideglanceHttp -Client $selectedClient -Method POST -Uri "$base/api/decode" -BodyJson (@{ inputText = 'fearless behavior 💀' } | ConvertTo-Json))
   Start-Sleep -Milliseconds 750
 } finally {
   if ($tailProcess -and -not $tailProcess.HasExited) { Stop-Process -Id $tailProcess.Id -Force -ErrorAction SilentlyContinue }

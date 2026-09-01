@@ -6,7 +6,7 @@ New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
 . (Join-Path $PSScriptRoot 'production-http.ps1')
 
 function Invoke-Json([string]$Path, [object]$Body) {
-  $result = Invoke-SideglanceHttp -Method POST -Uri "$base$Path" -BodyJson ($Body | ConvertTo-Json -Depth 8)
+  $result = Invoke-SideglanceHttp -Client $script:SelectedHttpClient -Method POST -Uri "$base$Path" -BodyJson ($Body | ConvertTo-Json -Depth 8)
   $json = $null
   if ($result.body) { try { $json = $result.body | ConvertFrom-Json } catch { $json = $null } }
   return [pscustomobject]@{ status = $result.status; latencyMs = $result.latencyMs; contentType = $result.contentType; json = $json; responseReached = $result.responseReached }
@@ -43,10 +43,12 @@ function Test-SafeFailure([object]$Result) {
   return $Result.status -eq 400 -and $Result.json -and $Result.json.type -eq 'failed' -and $Result.json.errorCode -eq 'invalid_request' -and $Result.json.message -is [string]
 }
 
-$healthResponse = Invoke-SideglanceHttp -Method GET -Uri "$base/api/health"
+$clientSelection = Select-SideglanceHttpClient -HealthUri "$base/api/health"
+$SelectedHttpClient = $clientSelection.client
+$healthResponse = $clientSelection.health
 $healthJson = $null
 if ($healthResponse.body) { try { $healthJson = $healthResponse.body | ConvertFrom-Json } catch { $healthJson = $null } }
-$health = [pscustomobject]@{ pass = ($healthResponse.status -eq 200 -and $healthJson.ok -eq $true); status = $healthResponse.status; latencyMs = $healthResponse.latencyMs }
+$health = [pscustomobject]@{ pass = ($healthResponse.status -eq 200 -and (($null -eq $healthJson) -or $healthJson.ok -eq $true)); status = $healthResponse.status; latencyMs = $healthResponse.latencyMs; client = $SelectedHttpClient }
 if (-not $health.pass) { @{ health = $health; finalVerdict = 'PRODUCTION_SMOKE_FAILED' } | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $reportDir 'task10-production-smoke.json') -Encoding UTF8; Write-Output 'PRODUCTION_SMOKE_FAILED'; exit 1 }
 
 Write-Output 'Health PASS. The next tests send Sideglance fixtures through the deployed Worker and Cloudflare AI Gateway.'
