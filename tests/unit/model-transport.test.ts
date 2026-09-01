@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CloudflareAIGatewayTransport, CloudflareGoogleNativeTransport, ModelTransportError, createModelTransport } from '../../worker/providers/model-transport';
+import { CloudflareAIGatewayTransport, ModelTransportError, createModelTransport } from '../../worker/providers/model-transport';
 import { contextGateResponseFormat } from '../../shared/schemas/context-gate-json';
 
 const request = { model: 'gemini-3.7-flash', messages: [{ role: 'user' as const, content: 'hello' }], response_format: { type: 'json_schema' } };
@@ -43,5 +43,32 @@ describe('Cloudflare AI Gateway transport', () => {
     expect(body).toMatchObject({ systemInstruction: { parts: [{ text: 'system text' }] }, contents: [{ role: 'user', parts: [{ text: 'hello' }] }], generationConfig: { responseMimeType: 'application/json', responseJsonSchema: contextGateResponseFormat.json_schema.schema } });
     expect(body.model).toBeUndefined();
     expect(await response.json()).toEqual({ choices: [{ message: { role: 'assistant', content: '{"status":"ready"}' } }] });
+  });
+
+  it('uses direct Google native transport without Gateway credentials', async () => {
+    let url = ''; let init: RequestInit | undefined;
+    const transport = createModelTransport({ mode: 'google_native_direct', model: 'gemini-3.7-flash', apiKey: 'google-test-key', fetcher: async (input, requestInit) => { url = String(input); init = requestInit; return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: '{"ok":true}' }] } }] }), { status: 200 }); } });
+    const response = await transport.chat({ model: 'gemini-3.7-flash', messages: [{ role: 'system' as const, content: 'system' }, { role: 'user' as const, content: 'user' }], response_format: { type: 'json_object' } });
+    expect(url).toBe('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent');
+    expect(init?.headers).toMatchObject({ 'x-goog-api-key': 'google-test-key', 'content-type': 'application/json' });
+    expect(init?.headers).not.toHaveProperty('cf-aig-authorization');
+    expect(init?.headers).not.toHaveProperty('authorization');
+    expect(JSON.parse(String(init?.body))).toMatchObject({ systemInstruction: { parts: [{ text: 'system' }] }, contents: [{ role: 'user', parts: [{ text: 'user' }] }], generationConfig: { responseMimeType: 'application/json' } });
+    expect(await response.json()).toEqual({ choices: [{ message: { role: 'assistant', content: '{"ok":true}' } }] });
+  });
+
+  it('maps direct Google auth and provider failures without retrying auth', async () => {
+    let attempts = 0;
+    const transport = createModelTransport({ mode: 'google_native_direct', model: 'm', apiKey: 'k', fetcher: async () => { attempts += 1; return new Response(JSON.stringify({ error: { message: 'invalid key' } }), { status: 401 }); } });
+    await expect(transport.chat(request)).rejects.toMatchObject({ category: 'google_auth_error', status: 401 });
+    expect(attempts).toBe(1);
+  });
+
+  it('retries direct Google transient provider failures once and requires its key', async () => {
+    let attempts = 0;
+    const transport = createModelTransport({ mode: 'google_native_direct', model: 'm', apiKey: 'k', retryBackoffMs: 0, fetcher: async () => { attempts += 1; return new Response(attempts === 1 ? '{"error":{"message":"busy"}}' : '{"candidates":[{"content":{"parts":[{"text":"ok"}]}}]}', { status: attempts === 1 ? 503 : 200 }); } });
+    await expect(transport.chat(request)).resolves.toBeInstanceOf(Response);
+    expect(attempts).toBe(2);
+    expect(() => createModelTransport({ mode: 'google_native_direct', model: 'm' })).toThrow(/Google AI Studio API key/);
   });
 });

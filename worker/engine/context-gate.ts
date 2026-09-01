@@ -60,7 +60,7 @@ export class AIContextGateEngine implements ContextGateEngine {
     } catch (error) {
       if (error instanceof ContextGateError) throw error;
       if (error instanceof ModelTransportError) {
-        if (error.category === 'gateway_timeout') throw new ContextGateError('timeout', 'Context gate request timed out.');
+        if (error.category === 'gateway_timeout' || error.category === 'provider_timeout') throw new ContextGateError('timeout', 'Context gate request timed out.');
         throw new ContextGateError('http_error', 'Context gate provider returned an HTTP error.', error.status, undefined, error.providerMessage);
       }
       throw new ContextGateError('transport', 'Context gate request failed.');

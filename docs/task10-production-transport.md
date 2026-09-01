@@ -1,8 +1,8 @@
 # Task 10 production transport
 
-Status: `IMPLEMENTED_LOCALLY` · `REDEPLOY_REQUIRED` · `PRODUCTION_DIAGNOSTIC_PENDING`
+Status: `DIRECT_GOOGLE_NATIVE_IMPLEMENTED_LOCALLY` · `READY_FOR_REDEPLOY` · `PRODUCTION_AI_SMOKE_PENDING`
 
-The Worker keeps fixture mode network-free. AI mode selects either the existing direct OpenAI-compatible transport (`MODEL_TRANSPORT=direct`), the optional Unified Billing transport, or the documented Google AI Studio native Gateway transport (`MODEL_TRANSPORT=cloudflare_google_native`). Both the Context Gate and Context Interpreter share one configured transport instance.
+The Worker keeps fixture mode network-free. AI mode selects the direct Google native production transport (`MODEL_TRANSPORT=google_native_direct`) or retained non-production alternatives (`direct`, `cloudflare_ai_gateway`, `cloudflare_google_native`). Both the Context Gate and Context Interpreter share one configured transport instance.
 
 ## Production request path
 
@@ -11,8 +11,8 @@ Browser
   ↓
 Cloudflare Worker
   ├─ Context Gate ─┐
-  └─ Interpreter ──┴─ POST https://gateway.ai.cloudflare.com/v1/{account}/default/google-ai-studio/v1/models/{MODEL_NAME}:generateContent
-                         x-goog-api-key + cf-aig-authorization
+  └─ Interpreter ──┴─ POST https://generativelanguage.googleapis.com/v1beta/models/{MODEL_NAME}:generateContent
+                         x-goog-api-key
                          ↓
                     Google AI Studio / Gemini
   ↓
@@ -21,7 +21,7 @@ Evidence reference resolution and deterministic grounding validation
 Decode response
 ```
 
-The native BYOK transport uses the Worker-only `cf-aig-authorization: Bearer <CLOUDFLARE_AIG_TOKEN>` header for AI Gateway and `x-goog-api-key: <MODEL_API_KEY>` for the user-owned Google AI Studio credential. The `cf-aig-collect-log-payload: false` privacy header is sent. The default gateway is used; no gateway ID is required.
+The production direct native transport uses only `x-goog-api-key: <MODEL_API_KEY>` for Google AI Studio. The Cloudflare Gateway transports remain isolated non-production alternatives and retain their own server-side authentication boundaries.
 
 ## Configuration (values are intentionally omitted)
 
@@ -45,7 +45,7 @@ Each model stage has a 30-second total transport budget and at most two attempts
 
 The Gate `response_format.type=json_schema` is translated to Gemini `generationConfig.responseMimeType=application/json` plus the existing `responseJsonSchema`. The Interpreter JSON mode is translated to `responseMimeType=application/json`. Native Gemini responses are adapted back to the existing OpenAI-compatible `choices[0].message.content` envelope before current parsing and contracts run. Malformed JSON, empty input, and oversized input/context are rejected before model work. The current model remains configurable; `PRODUCTION_MODEL_FINALIZATION_PENDING_EVALUATION` remains in force until the frozen evaluation evidence is sufficient.
 
-The first production AI smoke reached the deployed Worker but returned HTTP 502 for all three model cases through the deprecated unified compat surface. The subsequent provider-specific OpenAI passthrough also returned HTTP 502 and was superseded because Cloudflare does not document that combined path. This local change migrates production transport to the documented native Google AI Studio Gateway endpoint; it is not claimed production-fixed until redeployment and the single-case diagnostic succeed.
+The first production AI smoke reached the deployed Worker but returned HTTP 502 through the unified compat surface, the provider-specific OpenAI passthrough, and the documented Gateway-native attempt. For hackathon demo reliability, the current production candidate is direct Google native REST from the Worker; it is not claimed production-fixed until redeployment and the single-case diagnostic succeed.
 
 ## Post-deploy smoke plan (not run here)
 

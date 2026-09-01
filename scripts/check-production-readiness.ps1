@@ -19,7 +19,8 @@ Run-Check 'build' 'npm.cmd' @('run', 'build')
 
 if (-not (Test-Path (Join-Path $root 'node_modules/.bin/wrangler.ps1'))) { $blockers.Add('Wrangler is not installed') }
 $config = Get-Content (Join-Path $root 'wrangler.toml') -Raw
-if ($config -notmatch 'MODEL_TRANSPORT\s*=\s*"cloudflare_google_native"') { $blockers.Add('Google AI Studio native Gateway transport is not configured') }
+if ($config -notmatch 'MODEL_TRANSPORT\s*=\s*"google_native_direct"') { $blockers.Add('Direct Google native transport is not configured') }
+$directInference = $config -match 'MODEL_TRANSPORT\s*=\s*"google_native_direct"'
 if ($config -match 'CLOUDFLARE_(AIG_)?API_TOKEN\s*=') { $blockers.Add('token appears in tracked Wrangler config') }
 if (Test-Path (Join-Path $root '.git\index')) {
   $tracked = git ls-files -- '.dev.vars' '.dev.vars.*' | Out-String
@@ -31,9 +32,11 @@ if (Test-Path (Join-Path $root 'node_modules/.bin/wrangler.ps1')) {
   if ($LASTEXITCODE -ne 0) { $blockers.Add('Wrangler authentication is not confirmed') }
   $secretNames = (& npx.cmd wrangler secret list --env production 2>$null | Out-String)
   if ($LASTEXITCODE -eq 0) {
-    if ($secretNames -notmatch 'CLOUDFLARE_AIG_TOKEN') { $blockers.Add('CLOUDFLARE_AIG_TOKEN is not configured') }
     if ($secretNames -notmatch 'MODEL_API_KEY') { $blockers.Add('MODEL_API_KEY is not configured') }
-    if ($secretNames -notmatch 'CLOUDFLARE_ACCOUNT_ID') { $blockers.Add('CLOUDFLARE_ACCOUNT_ID is not configured') }
+    if (-not $directInference) {
+      if ($secretNames -notmatch 'CLOUDFLARE_AIG_TOKEN') { $blockers.Add('CLOUDFLARE_AIG_TOKEN is not configured') }
+      if ($secretNames -notmatch 'CLOUDFLARE_ACCOUNT_ID') { $blockers.Add('CLOUDFLARE_ACCOUNT_ID is not configured') }
+    }
   }
   else { $blockers.Add('Production secret names could not be verified') }
   & npx.cmd wrangler deploy --env production --dry-run 2>$null | Out-Null

@@ -127,7 +127,7 @@ export class ModelContextProvider implements ContextModelProvider {
     } catch (error) {
       if (error instanceof ContextProviderError) throw error;
       if (error instanceof ModelTransportError) {
-        if (error.category === 'gateway_timeout') throw new ContextProviderError('context_timeout', 'Context model request timed out.', baseDiagnostics('timeout', error.status ?? null, null, { errorName: error.name, errorMessage: error.message, providerMessage: error.providerMessage }));
+        if (error.category === 'gateway_timeout' || error.category === 'provider_timeout') throw new ContextProviderError('context_timeout', 'Context model request timed out.', baseDiagnostics('timeout', error.status ?? null, null, { errorName: error.name, errorMessage: error.message, providerMessage: error.providerMessage }));
         throw new ContextProviderError('model_unavailable', 'Context model is unavailable.', baseDiagnostics('http_error', error.status ?? null, null, { errorName: error.name, errorMessage: error.message, providerMessage: error.providerMessage }));
       }
       const exception = describeFetchError(error, false);
