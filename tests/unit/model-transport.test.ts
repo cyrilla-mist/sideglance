@@ -57,6 +57,17 @@ describe('Cloudflare AI Gateway transport', () => {
     expect(await response.json()).toEqual({ choices: [{ message: { role: 'assistant', content: '{"ok":true}' } }] });
   });
 
+  it('uses the final direct Google OpenAI-compatible production candidate', async () => {
+    let url = ''; let init: RequestInit | undefined;
+    const transport = createModelTransport({ mode: 'google_openai_direct', model: 'gemini-3.7-flash', apiKey: 'google-test-key', fetcher: async (input, requestInit) => { url = String(input); init = requestInit; return new Response(JSON.stringify({ choices: [{ message: { content: '{"ok":true}' } }] }), { status: 200 }); } });
+    await transport.chat(request);
+    expect(url).toBe('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions');
+    expect(init?.headers).toMatchObject({ authorization: 'Bearer google-test-key', 'content-type': 'application/json' });
+    expect(init?.headers).not.toHaveProperty('x-goog-api-key');
+    expect(init?.headers).not.toHaveProperty('cf-aig-authorization');
+    expect(JSON.parse(String(init?.body))).toMatchObject({ model: 'gemini-3.7-flash', messages: request.messages, response_format: request.response_format });
+  });
+
   it('maps direct Google auth and provider failures without retrying auth', async () => {
     let attempts = 0;
     const transport = createModelTransport({ mode: 'google_native_direct', model: 'm', apiKey: 'k', fetcher: async () => { attempts += 1; return new Response(JSON.stringify({ error: { message: 'invalid key' } }), { status: 401 }); } });

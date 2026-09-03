@@ -24,7 +24,7 @@ describe('production operator safeguards', () => {
   it('documents the AI Gateway token path without a billing requirement', () => {
     expect(read('docs/task10-production-setup.md')).toContain('AI Gateway token');
     expect(read('docs/task10-production-setup.md')).toContain('No Cloudflare credits');
-    expect(configure).toContain('Direct Google native inference selected');
+    expect(configure).toContain('Direct Google OpenAI inference selected');
     expect(configure).toContain('CLOUDFLARE_AIG_TOKEN');
   });
   it('requires exact DEPLOY before invoking Wrangler deploy', () => {
@@ -71,8 +71,8 @@ describe('production operator safeguards', () => {
   });
   it('enables explicit workers.dev routing for production', () => {
     expect(read('wrangler.toml')).toContain('workers_dev = true');
-    expect(read('wrangler.toml')).toContain('MODEL_TRANSPORT = "google_native_direct"');
-    expect(read('worker/routes/decode.ts')).toContain("env.MODEL_TRANSPORT === 'google_native_direct'");
+    expect(read('wrangler.toml')).toContain('MODEL_TRANSPORT = "google_openai_direct"');
+    expect(read('worker/routes/decode.ts')).toContain("env.MODEL_TRANSPORT === 'google_openai_direct'");
     expect(read('scripts/check-production-readiness.ps1')).toContain('$directInference');
   });
   it('passes all production PowerShell operators through the real Windows parser', () => {

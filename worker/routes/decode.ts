@@ -138,8 +138,8 @@ function createContextEngine(env: WorkerEnv, transport?: ModelTransport): Contex
 }
 
 function createTransport(env: WorkerEnv): ModelTransport | undefined {
-  const mode = env.MODEL_TRANSPORT === 'google_native_direct' ? 'google_native_direct' : env.MODEL_TRANSPORT === 'cloudflare_google_native' ? 'cloudflare_google_native' : env.MODEL_TRANSPORT === 'cloudflare_ai_gateway' ? 'cloudflare_ai_gateway' : 'direct';
-  if (env.MODEL_TRANSPORT && !['direct', 'google_native_direct', 'cloudflare_ai_gateway', 'cloudflare_google_native'].includes(env.MODEL_TRANSPORT)) throw new ModelTransportError('transport_error', 'Invalid model transport mode.');
+  const mode = env.MODEL_TRANSPORT === 'google_openai_direct' ? 'google_openai_direct' : env.MODEL_TRANSPORT === 'google_native_direct' ? 'google_native_direct' : env.MODEL_TRANSPORT === 'cloudflare_google_native' ? 'cloudflare_google_native' : env.MODEL_TRANSPORT === 'cloudflare_ai_gateway' ? 'cloudflare_ai_gateway' : 'direct';
+  if (env.MODEL_TRANSPORT && !['direct', 'google_openai_direct', 'google_native_direct', 'cloudflare_ai_gateway', 'cloudflare_google_native'].includes(env.MODEL_TRANSPORT)) throw new ModelTransportError('transport_error', 'Invalid model transport mode.');
   if (mode === 'direct' && !env.MODEL_API_KEY) return undefined;
   return createModelTransport({ mode, apiKey: env.MODEL_API_KEY, endpoint: env.MODEL_API_URL, model: env.MODEL_NAME, accountId: env.CLOUDFLARE_ACCOUNT_ID, cloudflareToken: env.CLOUDFLARE_API_TOKEN, cloudflareAigToken: env.CLOUDFLARE_AIG_TOKEN });
 }

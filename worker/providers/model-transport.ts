@@ -1,4 +1,4 @@
-export type ModelTransportMode = 'direct' | 'google_native_direct' | 'cloudflare_ai_gateway' | 'cloudflare_google_native';
+export type ModelTransportMode = 'direct' | 'google_openai_direct' | 'google_native_direct' | 'cloudflare_ai_gateway' | 'cloudflare_google_native';
 export type ModelTransportFailure = 'gateway_auth_error' | 'google_auth_error' | 'gateway_rate_limited' | 'provider_rate_limited' | 'gateway_provider_unavailable' | 'provider_unavailable' | 'gateway_timeout' | 'provider_timeout' | 'gateway_invalid_request' | 'structured_output_rejected' | 'model_contract_error' | 'transport_error';
 
 export type ModelMessage = { role: 'system' | 'user' | 'assistant'; content: string };
@@ -37,6 +37,11 @@ const GATEWAY_ENDPOINT = 'https://api.cloudflare.com/client/v4/accounts';
 
 export function createModelTransport(config: ModelTransportConfig): ModelTransport {
   if (config.mode !== 'direct' && !config.model) throw new ModelTransportConfigError('missing_model_config', 'Model name is not configured.');
+  if (config.mode === 'google_openai_direct') {
+    if (!config.model) throw new ModelTransportConfigError('missing_model_config', 'Model name is not configured.');
+    if (!config.apiKey) throw new ModelTransportConfigError('missing_google_key', 'Google AI Studio API key is not configured.');
+    return new GoogleOpenAICompatibleTransport(config);
+  }
   if (config.mode === 'google_native_direct') {
     if (!config.model) throw new ModelTransportConfigError('missing_model_config', 'Model name is not configured.');
     if (!config.apiKey) throw new ModelTransportConfigError('missing_google_key', 'Google AI Studio API key is not configured.');
@@ -62,6 +67,12 @@ export class DirectModelTransport implements ModelTransport {
   constructor(private readonly config: ModelTransportConfig) { this.fetcher = config.fetcher ?? defaultFetch; }
   chat(request: ModelChatRequest): Promise<Response> {
     return requestWithRetry(this.fetcher, resolveChatEndpoint(this.config.endpoint ?? 'https://api.openai.com/v1/chat/completions'), request, { authorization: `Bearer ${this.config.apiKey}`, 'content-type': 'application/json' }, this.config, 'direct');
+  }
+}
+
+export class GoogleOpenAICompatibleTransport extends DirectModelTransport {
+  constructor(config: ModelTransportConfig) {
+    super({ ...config, endpoint: 'https://generativelanguage.googleapis.com/v1beta/openai' });
   }
 }
 

@@ -4,7 +4,7 @@ compatibility_date = "2026-08-21"
 
 [env.production.vars]
 CONTEXT_ENGINE_MODE = "ai"
-MODEL_TRANSPORT = "google_native_direct"
+MODEL_TRANSPORT = "google_openai_direct"
 MODEL_NAME = "gemini-3.7-flash"
 
 [env.production]

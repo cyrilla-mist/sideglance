@@ -3,7 +3,7 @@ $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 $wrangler = 'npx.cmd'
 $config = Get-Content (Join-Path $root 'wrangler.toml') -Raw
-$directInference = $config -match 'MODEL_TRANSPORT\s*=\s*"google_native_direct"'
+$directInference = $config -match 'MODEL_TRANSPORT\s*=\s*"google_openai_direct"'
 
 Write-Output 'Checking authenticated Wrangler account...'
 $whoami = (& $wrangler wrangler whoami 2>$null | Out-String)
@@ -33,7 +33,7 @@ if (-not $directInference -and -not $hasAigToken) {
   if ($LASTEXITCODE -ne 0) { throw 'AI Gateway token configuration failed.' }
 } elseif (-not $directInference) { Write-Output 'CLOUDFLARE_AIG_TOKEN already exists; reusing it.' }
 
-if ($directInference) { Write-Output 'Direct Google native inference selected; Gateway secrets are not required for this path.' }
+if ($directInference) { Write-Output 'Direct Google OpenAI inference selected; Gateway secrets are not required for this path.' }
 
 if (-not $hasGoogleKey) {
   Write-Output 'Opening secure Wrangler prompt for the Google AI Studio MODEL_API_KEY...'
