@@ -38,7 +38,7 @@ Runtime: Google Gemini. Development assistance: ChatGPT and Codex. See [the full
 
 ## Repository
 
-Public repository URL: to be filled after GitHub publication.
+Public repository URL: https://github.com/cyrilla-mist/sideglance
 
 ## Team
 
