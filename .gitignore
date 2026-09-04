@@ -6,5 +6,6 @@ playwright-report/
 *.log
 .env*
 !.env.example
+!.env.pages
 .dev.vars
 .dev.vars.*

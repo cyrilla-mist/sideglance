@@ -4,6 +4,10 @@ Read between the lines.
 
 Sideglance is a context intelligence tool for people who understand the words but are not sure they understand what an online interaction actually means.
 
+## Live demo
+
+[Try the public demo](https://cyrilla-mist.github.io/sideglance/). For reproducible judging, the hosted demo uses Sideglance's deterministic fixture path; the repository also contains the Gemini-backed runtime architecture.
+
 ## The problem
 
 People can understand every English word in a post, chat, meme, or thread and still miss sarcasm, irony, social tone, community norms, cultural references, or usage boundaries.
