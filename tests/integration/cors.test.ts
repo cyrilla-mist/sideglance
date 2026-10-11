@@ -52,8 +52,13 @@ describe('Worker browser origin boundary', () => {
     expect(await fixture.json()).toMatchObject({ type: 'decoded' });
     expect(fixture.headers.get('Access-Control-Allow-Origin')).toBe(TRUSTED_ORIGIN);
 
-    const failed = await worker.fetch(decodeRequest(TRUSTED_ORIGIN), {
-      ...env, CONTEXT_ENGINE_MODE: 'ai',
+    const authorizedRequest = decodeRequest(TRUSTED_ORIGIN);
+    authorizedRequest.headers.set('Authorization', 'Bearer test-operator-token');
+    const failed = await worker.fetch(authorizedRequest, {
+      ...env,
+      CONTEXT_ENGINE_MODE: 'ai',
+      AI_ACCESS_TOKEN: 'test-operator-token',
+      AI_RATE_LIMITER: { limit: async () => ({ success: true }) },
     });
     expect(failed.status).toBe(502);
     expect(await failed.json()).toMatchObject({ type: 'failed', errorCode: 'missing_api_key' });
