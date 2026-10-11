@@ -9,6 +9,7 @@ import { AIContextGateEngine, ContextGateError, MockContextGateEngine } from '..
 import { createModelTransport, ModelTransportError, type ModelTransport } from '../providers/model-transport';
 
 export type WorkerEnv = {
+  ALLOWED_ORIGINS?: string;
   CONTEXT_ENGINE_MODE?: string;
   MODEL_API_KEY?: string;
   MODEL_API_URL?: string;
