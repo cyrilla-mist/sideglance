@@ -53,6 +53,29 @@ export default {
         });
       }
       if (request.method === 'POST') {
+        if (env.CONTEXT_ENGINE_MODE === 'ai') {
+          // Operator-only until public identity, budgeting, and abuse protection are designed.
+          // CORS cannot prevent scripts from calling the Worker with no Origin header.
+          if (!env.AI_ACCESS_TOKEN || !env.AI_RATE_LIMITER) {
+            return withBrowserCors(Response.json({ error: 'Live Decode is not configured.' }, { status: 503 }), origin);
+          }
+          if (request.headers.get('Authorization') !== `Bearer ${env.AI_ACCESS_TOKEN}`) {
+            return withBrowserCors(Response.json({ error: 'Authorization required.' }, { status: 401 }), origin);
+          }
+          let allowed = false;
+          try {
+            const result = await env.AI_RATE_LIMITER.limit({ key: 'sideglance:operator-decode' });
+            allowed = result.success === true;
+          } catch {
+            // Fail closed if Cloudflare's limit binding is unavailable.
+            return withBrowserCors(Response.json({ error: 'Live Decode is temporarily unavailable.' }, { status: 503 }), origin);
+          }
+          if (!allowed) {
+            return withBrowserCors(Response.json({ error: 'Too many Decode requests.' }, {
+              status: 429, headers: { 'Retry-After': '60' },
+            }), origin);
+          }
+        }
         return withBrowserCors(await handleDecode(request, env), origin);
       }
     }
