@@ -6,6 +6,7 @@ compatibility_date = "2026-08-21"
 CONTEXT_ENGINE_MODE = "ai"
 MODEL_TRANSPORT = "google_openai_direct"
 MODEL_NAME = "gemini-3.7-flash"
+ALLOWED_ORIGINS = "https://cyrilla-mist.github.io"
 
 [env.production]
 name = "sideglance-worker-production"
