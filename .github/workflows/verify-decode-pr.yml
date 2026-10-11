@@ -25,9 +25,11 @@ jobs:
       - name: Typecheck Worker
         run: npm run worker:typecheck
       - name: Test Decode client and Worker integration
-        run: npx vitest run tests/unit/decode-client.test.ts tests/integration/worker.test.ts tests/integration/cors.test.ts
+        run: npx vitest run tests/unit/decode-client.test.ts tests/integration/worker.test.ts tests/integration/cors.test.ts tests/integration/operator-gate.test.ts
       - name: Verify fixture Pages build
         run: npm run build:pages
+      - name: Validate production Worker bundle without deployment
+        run: npx wrangler deploy --dry-run --env production --outdir .wrangler/ci-production
 
   full-windows-tests:
     runs-on: windows-latest
