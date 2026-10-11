@@ -40,4 +40,14 @@ if (-not $hasGoogleKey) {
   & $wrangler wrangler secret put MODEL_API_KEY --env production
   if ($LASTEXITCODE -ne 0) { throw 'Google API key secret configuration failed.' }
 } else { Write-Output 'MODEL_API_KEY already exists; reusing it.' }
+# Production AI is operator-only until public auth + billing controls are reviewed.
+if ($secretNames -notmatch 'AI_ACCESS_TOKEN') {
+  Write-Output 'A separate 32+ character random operator token is required for paid AI access.'
+  Write-Output 'Prepare the random token in your password manager before continuing. You will need it for the protected smoke command.'
+  $confirmed = Read-Host 'Type YES only when ready to enter and retain the operator token'
+  if ($confirmed -cne 'YES') { Write-Output 'Operator token setup stopped. Do not deploy until it is configured.'; exit 1 }
+  & $wrangler wrangler secret put AI_ACCESS_TOKEN --env production
+  if ($LASTEXITCODE -ne 0) { throw 'Operator token secret configuration failed.' }
+} else { Write-Output 'AI_ACCESS_TOKEN already exists; reusing it.' }
+
 Write-Output 'Secrets configured. Run npm.cmd run production:readiness next.'
