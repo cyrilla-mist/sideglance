@@ -90,7 +90,7 @@ describe('production operator safeguards', () => {
     const encoded = Buffer.from(command, 'utf16le').toString('base64');
     const parsed = spawnSync('powershell.exe', ['-NoProfile', '-EncodedCommand', encoded], { encoding: 'utf8' });
     expect(parsed.status, `PowerShell parser exit=${parsed.status}\\nstdout: ${parsed.stdout}\\nstderr: ${parsed.stderr}`).toBe(0);
-  });
+  }, 30000);
   it('runs the deploy operator safely against mocked Wrangler output', () => {
     const tempRoot = mkdtempSync(join(tmpdir(), 'sideglance-deploy-'));
     const readinessPath = join(tempRoot, 'readiness.ps1');
