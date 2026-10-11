@@ -86,7 +86,9 @@ describe('production operator safeguards', () => {
     ];
     const root = process.cwd().replace(/'/g, "''");
     const command = `$root = '${root}'; $files = @('${files.join("','")}'); foreach ($file in $files) { $tokens = $null; $errors = $null; [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $root $file), [ref]$tokens, [ref]$errors) | Out-Null; if ($errors.Count -ne 0) { $errors | ForEach-Object { Write-Output \"\${file}: $($_.Message)\" }; exit 1 } }; exit 0`;
-    expect(() => execFileSync('powershell.exe', ['-NoProfile', '-Command', command], { encoding: 'utf8' })).not.toThrow();
+    // Encode the script to avoid Windows argument quoting changing PowerShell's syntax.
+    const encoded = Buffer.from(command, 'utf16le').toString('base64');
+    expect(() => execFileSync('powershell.exe', ['-NoProfile', '-EncodedCommand', encoded], { encoding: 'utf8' })).not.toThrow();
   });
   it('runs the deploy operator safely against mocked Wrangler output', () => {
     const tempRoot = mkdtempSync(join(tmpdir(), 'sideglance-deploy-'));
