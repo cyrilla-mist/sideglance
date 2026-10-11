@@ -83,11 +83,41 @@ describe('production operator safeguards', () => {
       'scripts/run-production-smoke.ps1',
       'scripts/production-http.ps1',
       'scripts/run-production-diagnostic.ps1',
+      'scripts/run-protected-operator-smoke.ps1',
     ];
     const root = process.cwd().replace(/'/g, "''");
     const command = `$root = '${root}'; $files = @('${files.join("','")}'); foreach ($file in $files) { $tokens = $null; $errors = $null; [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $root $file), [ref]$tokens, [ref]$errors) | Out-Null; if ($errors.Count -ne 0) { $errors | ForEach-Object { Write-Output \"\${file}: $($_.Message)\" }; exit 1 } }; exit 0`;
-    expect(() => execFileSync('powershell.exe', ['-NoProfile', '-Command', command], { encoding: 'utf8' })).not.toThrow();
+    // Encode the script to avoid Windows argument quoting changing PowerShell's syntax.
+    const encoded = Buffer.from(command, 'utf16le').toString('base64');
+    const parsed = spawnSync('powershell.exe', ['-NoProfile', '-EncodedCommand', encoded], { encoding: 'utf8' });
+    expect(parsed.status, `PowerShell parser exit=${parsed.status}\\nstdout: ${parsed.stdout}\\nstderr: ${parsed.stderr}`).toBe(0);
+  }, 30000);
+  it('requires private operator access and native rate limiting for live inference', () => {
+    const config = read('wrangler.toml');
+    expect(config).toContain('MODEL_NAME = "gemini-3.8-flash"');
+    expect(config).toContain('[[env.production.ratelimits]]');
+    expect(config).toContain('name = "AI_RATE_LIMITER"');
+    expect(config).toContain('limit = 3');
+    const worker = read('worker/index.ts');
+    expect(worker).toContain('env.AI_ACCESS_TOKEN');
+    expect(worker).toContain('env.AI_RATE_LIMITER.limit');
+    expect(worker).toContain("status: 429");
+    expect(readiness).toContain('AI_ACCESS_TOKEN is not configured');
+    expect(configure).toContain('secret put AI_ACCESS_TOKEN --env production');
   });
+
+  it('keeps the one-case operator diagnostic secret-only and explicitly approved', () => {
+    const script = read('scripts/run-protected-operator-smoke.ps1');
+    expect(script).toContain("HEALTH_PASS");
+    expect(script.indexOf('HEALTH_PASS')).toBeLessThan(script.indexOf("Type YES"));
+    expect(script).toContain("-AsSecureString");
+    expect(script).toContain("Authorization =");
+    expect(script).toContain("exact production Workers.dev HTTPS origin");
+    expect(script).toContain('AI_DIAGNOSTIC_TRANSPORT_PASS');
+    expect(script).not.toContain('Write-Output $accessToken');
+    expect(script).not.toContain('curl.exe');
+  });
+
   it('runs the deploy operator safely against mocked Wrangler output', () => {
     const tempRoot = mkdtempSync(join(tmpdir(), 'sideglance-deploy-'));
     const readinessPath = join(tempRoot, 'readiness.ps1');

@@ -20,6 +20,9 @@ Run-Check 'build' 'npm.cmd' @('run', 'build')
 if (-not (Test-Path (Join-Path $root 'node_modules/.bin/wrangler.ps1'))) { $blockers.Add('Wrangler is not installed') }
 $config = Get-Content (Join-Path $root 'wrangler.toml') -Raw
 if ($config -notmatch 'MODEL_TRANSPORT\s*=\s*"google_openai_direct"') { $blockers.Add('Direct Google OpenAI transport is not configured') }
+if ($config -notmatch 'MODEL_NAME\s*=\s*"gemini-3.8-flash"') { $blockers.Add('Production model is not the reviewed Gemini 3.8 Flash') }
+if ($config -notmatch 'name\s*=\s*"AI_RATE_LIMITER"') { $blockers.Add('AI_RATE_LIMITER binding is not configured') }
+if ($config -notmatch 'limit\s*=\s*3') { $blockers.Add('Reviewed low-volume rate limit is missing') }
 $directInference = $config -match 'MODEL_TRANSPORT\s*=\s*"google_openai_direct"'
 if ($config -match 'CLOUDFLARE_(AIG_)?API_TOKEN\s*=') { $blockers.Add('token appears in tracked Wrangler config') }
 if (Test-Path (Join-Path $root '.git\index')) {
@@ -33,6 +36,7 @@ if (Test-Path (Join-Path $root 'node_modules/.bin/wrangler.ps1')) {
   $secretNames = (& npx.cmd wrangler secret list --env production 2>$null | Out-String)
   if ($LASTEXITCODE -eq 0) {
     if ($secretNames -notmatch 'MODEL_API_KEY') { $blockers.Add('MODEL_API_KEY is not configured') }
+    if ($secretNames -notmatch 'AI_ACCESS_TOKEN') { $blockers.Add('AI_ACCESS_TOKEN is not configured') }
     if (-not $directInference) {
       if ($secretNames -notmatch 'CLOUDFLARE_AIG_TOKEN') { $blockers.Add('CLOUDFLARE_AIG_TOKEN is not configured') }
       if ($secretNames -notmatch 'CLOUDFLARE_ACCOUNT_ID') { $blockers.Add('CLOUDFLARE_ACCOUNT_ID is not configured') }

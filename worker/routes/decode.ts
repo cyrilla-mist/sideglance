@@ -9,6 +9,9 @@ import { AIContextGateEngine, ContextGateError, MockContextGateEngine } from '..
 import { createModelTransport, ModelTransportError, type ModelTransport } from '../providers/model-transport';
 
 export type WorkerEnv = {
+  ALLOWED_ORIGINS?: string;
+  AI_ACCESS_TOKEN?: string;
+  AI_RATE_LIMITER?: { limit(options: { key: string }): Promise<{ success: boolean }> };
   CONTEXT_ENGINE_MODE?: string;
   MODEL_API_KEY?: string;
   MODEL_API_URL?: string;

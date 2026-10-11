@@ -1,4 +1,4 @@
-param([Parameter(Mandatory = $true)][string]$ProductionUrl)
+﻿param([Parameter(Mandatory = $true)][string]$ProductionUrl)
 $ErrorActionPreference = 'Stop'
 $base = $ProductionUrl.TrimEnd('/')
 $root = Split-Path -Parent $PSScriptRoot
