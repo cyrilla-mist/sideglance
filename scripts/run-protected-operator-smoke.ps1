@@ -3,7 +3,7 @@ param([Parameter(Mandatory = $true)][string]$ProductionUrl)
 $ErrorActionPreference = 'Stop'
 $uri = $null
 try { $uri = [uri]$ProductionUrl } catch { throw 'Invalid Worker URL.' }
-if ($uri.Scheme -cne 'https' -or $uri.Host -cnotmatch '^sideglance-worker-production\\.[a-z0-9-]+\\.workers\\.dev$' -or
+if ($uri.Scheme -cne 'https' -or $uri.Host -cnotmatch '^sideglance-worker-production\.[a-z0-9-]+\.workers\.dev$' -or
     $uri.AbsolutePath -cne '/' -or $uri.Query -or $uri.Fragment -or $uri.UserInfo -or
     $uri.Port -ne 443) {
   throw 'For credential safety, provide only the exact production Workers.dev HTTPS origin.'
